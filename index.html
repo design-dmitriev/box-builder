@@ -751,15 +751,18 @@
   // Дно-замок в 3D: четыре клапана той же формы, что в развёртке, каждый
   // на своей петле у нижнего края стенки. Светлый контур — чтобы на чёрном
   // было видно, как паз, язык и крючки сцепляются.
-  const lockM = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.7, side: THREE.DoubleSide });
-  const lockEdgeM = new THREE.LineBasicMaterial({ color: 0xd9d6d0 });
+  const lockFaceM = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.6, side: THREE.DoubleSide });
+  const lockLineM = new THREE.LineBasicMaterial({ color: 0x8a857d });
+  const lockEdgeM = new THREE.MeshStandardMaterial({ color: 0xcfc8bc, roughness: 0.95, side: THREE.DoubleSide });
   function lockFlap(pts, basis, y, parent) {
     const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([u, v]) => s.lineTo(u, v));
-    const g = new THREE.ShapeGeometry(s);
-    const m = new THREE.Matrix4().set(...basis[0], 0, 0, 0, 0, y, ...basis[1], 0, 0, 0, 0, 1);
-    g.applyMatrix4(m);
-    const mesh = new THREE.Mesh(g, lockM); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
-    parent.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), lockEdgeM));
+    const g = new THREE.ExtrudeGeometry(s, { depth: T, bevelEnabled: false });
+    // (u, v, w) контура -> (x, y, z) коробки; толщина картона уходит вниз от слоя y
+    const m = new THREE.Matrix4().set(basis[0][0], basis[0][1], 0, 0, 0, 0, -1, y, basis[1][0], basis[1][1], 0, 0, 0, 0, 0, 1);
+    g.applyMatrix4(m); g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, [lockFaceM, lockEdgeM]); parent.add(mesh);
+    // приглушённый контур — как тень от линии реза, чтобы замок читался на чёрном
+    parent.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), lockLineM));
   }
   function buildLock3D(q, boxG) {
     const { W, D } = q, k = lockDims(q), n = D * 0.25;
@@ -768,12 +771,12 @@
     const hook = [[-D / 2, 0], [D / 2, 0], [D / 2, k.hB * 0.2], [D * 0.1, k.hB * 0.72], [D * 0.22, k.hB], [-D * 0.22, k.hB], [-D * 0.1, k.hB * 0.72], [-D / 2, k.hB * 0.2]];
     // порядок сборки = порядок слоёв: крючки внутри, затем клапан с пазом, снаружи язык
     const back = new THREE.Group(); back.position.set(0, 0, -D / 2 + T); boxG.add(back);
-    lockFlap(slot, [[1, 0, 0], [0, 1, 0]], -T * 1.5, back);
+    lockFlap(slot, [[1, 0], [0, 1]], -T * 1.4, back);
     const front = new THREE.Group(); front.position.set(0, 0, D / 2 - T); boxG.add(front);
-    lockFlap(tongue, [[1, 0, 0], [0, -1, 0]], -T * 2.5, front);
+    lockFlap(tongue, [[1, 0], [0, -1]], -T * 2.8, front);
     const hooks = [-1, 1].map(sx => {
       const g = new THREE.Group(); g.position.set(sx * (W / 2 - T), 0, 0); boxG.add(g);
-      lockFlap(hook, [[0, -sx, 0], [1, 0, 0]], -T * 0.5, g);
+      lockFlap(hook, [[0, -sx], [1, 0]], 0, g);
       return { sx, g };
     });
     return { back, front, hooks };
@@ -907,6 +910,8 @@
   const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
   const seg = (t, a, b) => ease((t - a) / (b - a));
   const R = d => d * Math.PI / 180;
+  const easeS = x => x < 0 ? 0 : x > 1 ? 1 : x * x * x * (x * (x * 6 - 15) + 10);
+  const segS = (t, a, b) => easeS((t - a) / (b - a));
   function setStep(idx) { [...document.querySelectorAll('#steps span')].forEach((s, i) => s.classList.toggle('on', i === idx)); }
   function pose(t) {
     if (!dims) return;
@@ -923,22 +928,22 @@
       const { H, D } = dims, { boxG, topG, botG, flaps } = tuckParts;
       if (dims.q.closed) {
         const { lock } = tuckParts;
-        topG.rotation.x = seg(t, 0.03, 0.3) * R(125);
-        const ftc = seg(t, 0.2, 0.35);
+        topG.rotation.x = segS(t, 0.02, 0.24) * R(125);
+        const ftc = segS(t, 0.14, 0.3);
         flaps.forEach(({ sx, ft: a }) => { a.rotation.z = sx * -ftc * R(100); });
         botG.rotation.x = 0;
         // дно выезжает в центр кадра и смотрит в камеру, корпус уходит назад
-        const e = seg(t, 0.38, 0.6);
+        const e = segS(t, 0.3, 0.62);
         boxG.rotation.order = 'YXZ';
         boxG.rotation.set(-e * R(100), e * R(35), 0);
         boxG.position.set(0, e * (H + D) * 0.55, 0);
         if (lock) {
-          const o = i => seg(t, 0.64 + i * 0.1, 0.8 + i * 0.1) * R(65);
+          const o = i => segS(t, 0.64 + i * 0.1, 0.84 + i * 0.08) * R(80);
           lock.front.rotation.x = -o(0);
           lock.back.rotation.x = o(1);
           lock.hooks.forEach(({ sx, g }) => { g.rotation.z = sx * o(2); });
         }
-        setStep(t <= 0.02 ? 0 : t < 0.36 ? 1 : t < 0.62 ? 2 : 3);
+        setStep(t <= 0.02 ? 0 : t < 0.3 ? 1 : t < 0.64 ? 2 : 3);
         return;
       }
       boxG.rotation.x = 0; boxG.position.z = 0;
