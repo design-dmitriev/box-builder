@@ -247,6 +247,7 @@
       <label class="num" id="f-D"><span>Толщина, мм</span><input id="p-D" type="number" step="0.5" min="8" max="80" inputmode="decimal"></label>
       <label class="num" id="f-nw"><span>Вырез ш., мм</span><input id="p-nw" type="number" step="0.5" min="0" max="80" inputmode="decimal"></label>
       <label class="num" id="f-nh"><span>Вырез гл., мм</span><input id="p-nh" type="number" step="0.5" min="0" max="40" inputmode="decimal"></label>
+      <label class="num" id="f-dh"><span>Бок. клапаны, мм</span><input id="p-dh" type="number" step="0.5" min="3" max="200" inputmode="decimal"></label>
     </div>
     <p class="derived" id="derived"></p>
   </section>
@@ -481,9 +482,12 @@
     // Боковые клапаны сразу доходят почти до центра: между ними 1 мм,
     // без нахлёста; не длиннее половины высоты.
     const DH_GAP = 1;
-    const dh = Math.max(3, Math.min(W / 2 - DH_GAP / 2, H * 0.5));
+    const dhFull = Math.max(3, Math.min(W / 2 - DH_GAP / 2, H * 0.5));
+    const dhFullUsed = !(isFinite(p.dh) && p.dh > 0);
+    const dh = dhFullUsed ? dhFull : Math.min(Math.max(p.dh, 3), dhFull);
+    const dhCut = !dhFullUsed && p.dh > dhFull + 0.01;
     const hangW = Math.min(50, W - 6), hangOK = hangW >= 40;
-    return { ...p, W, H, D, tuck, dh, hangW, hangOK, closed };
+    return { ...p, W, H, D, tuck, dh, dhFull, dhFullUsed, dhCut, hangW, hangOK, closed };
   }
   function tuckBox(q, x0, yT, hanger) {
     const { W, H, D, tuck, dh } = q;
@@ -923,20 +927,31 @@
   });
 
   // ================= parameters UI =================
-  const allIds = ['W', 'L', 'D', 'nw', 'nh'];
+  const allIds = ['W', 'L', 'D', 'nw', 'nh', 'dh'];
   const inp = Object.fromEntries(allIds.map(k => [k, document.getElementById('p-' + k)]));
-  const idsFor = ty => ty === 'sleeve' ? ['W', 'L', 'D', 'nw', 'nh'] : ['W', 'L', 'D'];
+  const idsFor = ty => ty === 'sleeve' ? ['W', 'L', 'D', 'nw', 'nh'] : ty === 'tuck' ? ['W', 'L', 'D', 'dh'] : ['W', 'L', 'D'];
+  // Пустое поле «Бок. клапаны» = полные клапаны (0 в поле не показываем).
+  const optional = k => k === 'dh';
+  const shown = (k, v) => optional(k) && !(v > 0) ? '' : v;
   const closedBot = () => boxType === 'tuck' && document.getElementById('closedbot').checked;
   let ids = idsFor(boxType);
   const hangerOn = () => document.getElementById('hanger').checked;
   const pkey = () => boxType === 'sleeve' ? 'boxParams' : 'boxParams_' + boxType;
   const load = () => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(pkey()) || '{}') }; } catch (e) { return { ...DEF }; } };
   const store = p => { try { localStorage.setItem(pkey(), JSON.stringify(p)); } catch (e) { /* private mode */ } };
+  // Один раз убираем старое ручное значение боковых клапанов — со старта они полные.
+  try {
+    if (!localStorage.getItem('tuckDhFullV2')) {
+      const s = JSON.parse(localStorage.getItem('boxParams_tuck') || '{}'); delete s.dh; delete s.tk;
+      localStorage.setItem('boxParams_tuck', JSON.stringify(s)); localStorage.setItem('tuckDhFullV2', '1');
+    }
+  } catch (e) { /* private mode */ }
   let params = load();
-  ids.forEach(k => { inp[k].value = params[k]; });
+  ids.forEach(k => { inp[k].value = shown(k, params[k]); });
   function readParams() {
     const p = {}; let ok = true;
     ids.forEach(k => {
+      if (optional(k) && String(inp[k].value).trim() === '') { p[k] = 0; inp[k].classList.remove('bad'); return; }
       const v = parseFloat(String(inp[k].value).replace(',', '.'));
       const bad = !isFinite(v) || v < +inp[k].min || v > +inp[k].max;
       inp[k].classList.toggle('bad', bad); if (bad) ok = false; p[k] = v;
@@ -952,10 +967,11 @@
       return;
     }
     if (boxType === 'tuck') {
+      inp.dh.placeholder = 'полные · ' + fmt(q.dhFull);
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
-      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · пылевые клапаны ${fmt(q.dh)} мм · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
+      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
       return;
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
@@ -974,7 +990,7 @@
     timer = setTimeout(() => { const p = readParams(); if (!p) return say('Проверьте размеры: поле подсвечено красным.', true); params = p; store(p); build(p, true); say(''); }, 350);
   }));
   document.getElementById('p-reset').addEventListener('click', () => {
-    params = { ...DEF }; ids.forEach(k => { inp[k].value = DEF[k]; inp[k].classList.remove('bad'); }); store(params); build(params, false);
+    params = { ...DEF }; ids.forEach(k => { inp[k].value = shown(k, DEF[k]); inp[k].classList.remove('bad'); }); store(params); build(params, false);
   });
   document.getElementById('hanger').addEventListener('change', e => { if (hangerMesh) hangerMesh.visible = e.target.checked; repaint(); if (boxType === 'tuck') updateTexts(deriveTuck(params)); });
   const STEPS = { sleeve: ['В коробке', 'Вытягиваем за вырезы', 'Коробка извлечена', 'Крышка снята'], tuck: ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'], tele: ['Закрыта', 'Поднимаем крышку', 'Снимаем', 'Открыта'] };
@@ -984,12 +1000,13 @@
     ['nw', 'nh'].forEach(k => { document.getElementById('f-' + k).hidden = boxType !== 'sleeve'; });
     document.getElementById('f-zones').hidden = boxType !== 'sleeve';
     document.getElementById('f-closedbot').hidden = boxType !== 'tuck';
+    document.getElementById('f-dh').hidden = boxType !== 'tuck';
     STEPS.tuck = closedBot() ? ['Закрыта', 'Крышка открыта', 'Клапаны открыты', 'Внутри'] : ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
     document.getElementById('f-hanger').hidden = boxType === 'tele';
     Object.entries(LABELS[boxType]).forEach(([k, v]) => { document.querySelector('#f-' + k + ' span').textContent = v; });
     document.getElementById('steps').innerHTML = STEPS[boxType].map((s, i) => `<span${i === 0 ? ' class="on"' : ''}>${s}</span>`).join('');
     document.getElementById('p-reset').textContent = `${fmt(DEF.W)} × ${fmt(DEF.L)} × ${fmt(DEF.D)}`;
-    ids.forEach(k => { inp[k].value = params[k]; inp[k].classList.remove('bad'); });
+    ids.forEach(k => { inp[k].value = shown(k, params[k]); inp[k].classList.remove('bad'); });
   }
   document.querySelectorAll('#types button').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.type === boxType) return;
