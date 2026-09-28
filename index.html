@@ -257,7 +257,7 @@
     <div class="checks">
       <label class="chk" id="f-hanger"><input type="checkbox" id="hanger" checked><span>Европодвес</span></label>
       <label class="chk"><input type="checkbox" id="blackboard"><span>Чёрный картон внутри</span></label>
-      <label class="chk" id="f-closedbot"><input type="checkbox" id="closedbot"><span>Дно закрыто (на клею, не открывается)</span></label>
+      <label class="chk" id="f-closedbot"><input type="checkbox" id="closedbot"><span>Дно-замок 1-2-3 (не открывается)</span></label>
       <label class="chk" id="f-zones"><input type="checkbox" id="zones" checked><span>Зоны под стрелки</span></label>
     </div>
   </section>
@@ -464,6 +464,16 @@
     if (up) { const ye = y - th; return P([[x + inn, y], ...arc(x + inn + r, ye + r, r, 180, 270), ...arc(x + w - inn - r, ye + r, r, 270, 360), [x + w - inn, y]]); }
     const ye = y + th; return P([[x + w - inn, y], ...arc(x + w - inn - r, ye - r, r, 0, 90), ...arc(x + inn + r, ye - r, r, 90, 180), [x + inn, y]]);
   }
+  // Дно-замок 1-2-3: клапан с пазом (задняя), клапан с языком (лицевая),
+  // два клапана-крючка (бока). Складывается без клея, не открывается.
+  function lockDims(q) { const D = q.D; return { hS: D * 0.55, hT: D * 0.85, hB: D * 0.6, max: D * 0.85 }; }
+  function lockBottom(q, xB, xS1, xF, xS2, y) {
+    const { W, D } = q, k = lockDims(q), n = D * 0.25;
+    const slot = P([[xB, y], [xB + W, y], [xB + W, y + k.hS], [xB + W * 0.68, y + k.hS], [xB + W * 0.68, y + k.hS - n], [xB + W * 0.32, y + k.hS - n], [xB + W * 0.32, y + k.hS], [xB, y + k.hS]]);
+    const tongue = P([[xF, y], [xF + W, y], [xF + W, y + D * 0.08], [xF + W * 0.64, y + D * 0.6], [xF + W * 0.68, y + k.hT], [xF + W * 0.32, y + k.hT], [xF + W * 0.36, y + D * 0.6], [xF, y + D * 0.08]]);
+    const hook = x => P([[x, y], [x + D, y], [x + D, y + k.hB * 0.2], [x + D * 0.6, y + k.hB * 0.72], [x + D * 0.72, y + k.hB], [x + D * 0.28, y + k.hB], [x + D * 0.4, y + k.hB * 0.72], [x, y + k.hB * 0.2]]);
+    return [slot, tongue, hook(xS1), hook(xS2)];
+  }
   const dustUp = (x, y, w, h) => P([[x, y], [x + 1.5, y - 4], [x + 4, y - h], [x + w - 3, y - h], [x + w - 0.5, y - 6], [x + w, y]]);
   function deriveTuck(p) {
     const W = p.W, H = p.L, D = p.D;
@@ -479,16 +489,21 @@
     const xB = x0, xS1 = x0 + W, xF = xS1 + D, xS2 = xF + W, xG = xS2 + D, yB = yT + H;
     const parts = [rect(xB, yT, xG, yB), P([[xG, yT], [xG + GLUE, yT + 10], [xG + GLUE, yB - 10], [xG, yB]]),
       rect(xF, yT - D, xF + W, yT), tuckPoly(xF, yT - D, W, tuck, true),
-      rect(xB, yB, xB + W, yB + D), q.closed ? P([[xB + 1, yB + D], [xB + 5, yB + D + tuck], [xB + W - 5, yB + D + tuck], [xB + W - 1, yB + D]]) : tuckPoly(xB, yB + D, W, tuck, false),
-      dustUp(xS1, yT, D, dh), dustUp(xS2, yT, D, dh), dustDown(xS1, yB, D, dh), dustDown(xS2, yB, D, dh)];
+      ...(q.closed ? lockBottom(q, xB, xS1, xF, xS2, yB) : [rect(xB, yB, xB + W, yB + D), tuckPoly(xB, yB + D, W, tuck, false)]),
+      dustUp(xS1, yT, D, dh), dustUp(xS2, yT, D, dh), ...(q.closed ? [] : [dustDown(xS1, yB, D, dh), dustDown(xS2, yB, D, dh)])];
     const creases = [[xF, yT, xF + W, yT], [xS1, yT, xS1 + D, yT], [xS2, yT, xS2 + D, yT],
-      [xB, yB, xB + W, yB], [xS1, yB, xS1 + D, yB], [xS2, yB, xS2 + D, yB],
+      [xB, yB, xB + W, yB], [xS1, yB, xS1 + D, yB], [xS2, yB, xS2 + D, yB], ...(q.closed ? [[xF, yB, xF + W, yB]] : []),
       ...[xS1, xF, xS2, xG].map(x => [x, yT, x, yB]),
-      [xF + 1, yT - D, xF + W - 1, yT - D], [xB + 1, yB + D, xB + W - 1, yB + D]];
+      [xF + 1, yT - D, xF + W - 1, yT - D], ...(q.closed ? [] : [[xB + 1, yB + D, xB + W - 1, yB + D]])];
     const options = [], holes = [], labels = [];
     const rects = { back: [xB, yT, W, H], s1: [xS1, yT, D, H], front: [xF, yT, W, H], s2: [xS2, yT, D, H],
       lidTop: [xF, yT - D, W, D], tuckTop: [xF, yT - D - tuck, W, tuck], lidBot: [xB, yB, W, D], tuckBot: [xB, yB + D, W, tuck],
       dust1T: [xS1, yT - dh, D, dh], dust2T: [xS2, yT - dh, D, dh], dust1B: [xS1, yB, D, dh], dust2B: [xS2, yB, D, dh] };
+    if (q.closed) {
+      const k = lockDims(q);
+      rects.lidBot = [xB, yB, W, k.hS]; rects.tuckBot = [xF, yB, W, k.hT];
+      rects.dust1B = [xS1, yB, D, k.hB]; rects.dust2B = [xS2, yB, D, k.hB];
+    }
     if (hanger) {
       const hw = q.hangW, hx = xB + (W - hw) / 2, r = 6;
       parts.push(P([[hx, yT], ...arc(hx + r, yT - 2 * HANG_H + r, r, 180, 270), ...arc(hx + hw - r, yT - 2 * HANG_H + r, r, 270, 360), [hx + hw, yT]]));
@@ -500,15 +515,21 @@
     const outline = union(parts), bleed = offset(outline, BLEED);
     const printFill = diff(bleed, [rect(xG, yT - 400, xG + 60, yB + 400)]);
     const panels = [rect(xB, yT, xS1, yB), rect(xS1, yT, xF, yB), rect(xF, yT, xF + W, yB), rect(xS2, yT, xG, yB),
-      rect(xF, yT - D, xF + W, yT), rect(xB, yB, xB + W, yB + D)].map(pp => offset([pp], -SAFE));
+      rect(xF, yT - D, xF + W, yT), ...(q.closed ? [] : [rect(xB, yB, xB + W, yB + D)])].map(pp => offset([pp], -SAFE));
     const L = (x, y, s, size, rot, fill) => labels.push({ x, y, s, size, rot: rot || 0, fill: fill || COL.label });
     [[xB, 'ЗАДНЯЯ'], [xF, 'ЛИЦЕВАЯ']].forEach(([xp, t]) => { L(xp + W / 2, yT + H / 2, t, 6); L(xp + W / 2, yT + H / 2 + 7, `${f1(W)} × ${f1(H)}`, 3.5); });
     [xS1, xS2].forEach(x => L(x + D / 2 + 1.5, yT + H / 2, `БОК ${f1(D)} × ${f1(H)}`, Math.min(4, D / 4), -90));
     L(xG + GLUE / 2 + 1.5, yT + H / 2, 'КЛЕЙ', 3.5, -90);
     L(xF + W / 2, yT - D / 2 + 1.2, 'ВЕРХ (крышка)', Math.min(3.5, D / 5));
     L(xF + W / 2, yT - D - tuck / 2 + 1, 'язычок', 3);
-    L(xB + W / 2, yB + D / 2 + 1.2, q.closed ? 'ДНО (закрыто)' : 'ДНО (крышка)', Math.min(3.5, D / 5));
-    L(xB + W / 2, yB + D + tuck / 2 + 1, q.closed ? 'КЛЕЙ' : 'язычок', 3);
+    if (q.closed) {
+      const k = lockDims(q), s = Math.min(3, D / 6);
+      L(xB + W / 2, yB + k.hS * 0.35, 'ДНО-ЗАМОК · паз', s);
+      L(xF + W / 2, yB + k.hT * 0.35, 'язык замка', s);
+    } else {
+      L(xB + W / 2, yB + D / 2 + 1.2, 'ДНО (крышка)', Math.min(3.5, D / 5));
+      L(xB + W / 2, yB + D + tuck / 2 + 1, 'язычок', 3);
+    }
     if (hanger) { L(xB + W / 2, yT - 3.5, 'европодвес', 2.8); L(xB + W / 2, yT - HANG_H + 4.5, 'линия подгиба, клей', 2.5); }
     return { outline, bleed, printFill, holes, creases, options, panels, labels, rects, zones: [] };
   }
@@ -518,15 +539,15 @@
     const topExt = Math.max(q.D + q.tuck, hang ? 2 * HANG_H : 0, q.dh);
     const x0 = M + BLEED + 2, yT = M + 14 + BLEED + topExt + 2;
     const pc = tuckBox(q, x0, yT, hang);
-    const bottom = yT + q.H + q.D + q.tuck + BLEED;
+    const bottom = yT + q.H + (q.closed ? lockDims(q).max : q.D + q.tuck) + BLEED;
     const TW = Math.max(x0 + 2 * q.W + 2 * q.D + GLUE + BLEED + M, 280);
     const TH = bottom + 50.5;
     const heads = [
       [x0, M + 4, 'КОРОБКА С ЯЗЫЧКАМИ — обратный замок (RTE, ECMA A20.20)' + (hang ? ', с европодвесом' : ''), 5, true],
-      [x0, M + 10, `Панели ${f1(q.W)} × ${f1(q.D)} × ${f1(q.H)} мм (ширина × глубина × высота) · ${q.closed ? 'открывается только сверху, дно на клею' : 'открывается сверху и снизу'}`, 3.3],
+      [x0, M + 10, `Панели ${f1(q.W)} × ${f1(q.D)} × ${f1(q.H)} мм (ширина × глубина × высота) · ${q.closed ? 'открывается только сверху, дно-замок 1-2-3' : 'открывается сверху и снизу'}`, 3.3],
     ];
     const notes = [
-      q.closed ? 'Верхняя крышка с язычком открывается. Дно не открывается: нижний клапан и пылевые клапаны приклеиваются изнутри.' : 'Верхняя крышка крепится к лицевой стороне, нижняя — к задней (reverse tuck end). Язычки заходят внутрь коробки.',
+      q.closed ? 'Верхняя крышка с язычком открывается. Дно-замок 1-2-3: сложить боковые крючки, затем клапан с пазом, затем завести язык в паз — без клея, дно не открывается.' : 'Верхняя крышка крепится к лицевой стороне, нижняя — к задней (reverse tuck end). Язычки заходят внутрь коробки.',
       'Пылевые клапаны на боках. Клеевой клапан 13 мм приклеивается к задней стороне изнутри.',
       'Картон 0,3–0,4 мм; перед печатью сверить со штампом типографии.',
     ];
@@ -933,7 +954,7 @@
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
-      document.getElementById('derived').textContent = `${q.closed ? 'Дно закрыто (на клею) · ' : ''}Язычок ${fmt(q.tuck)} мм · пылевые клапаны ${fmt(q.dh)} мм · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
+      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · пылевые клапаны ${fmt(q.dh)} мм · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
       return;
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
@@ -1104,7 +1125,7 @@
       return `<image x="${r[0].toFixed(3)}" y="${r[1].toFixed(3)}" width="${r[2].toFixed(3)}" height="${r[3].toFixed(3)}" preserveAspectRatio="none" href="${cc.toDataURL('image/jpeg', 0.9)}"/>`;
     }).join('');
   }
-  const baseName = () => `${({ tuck: closedBot() ? 'korobka-yazychok-dno-zakryto' : 'korobka-yazychki', tele: 'kryshka-dno', sleeve: 'futlyar' })[boxType]}_${f1(params.W)}x${f1(params.L)}x${f1(params.D)}`.replace(/\./g, ',');
+  const baseName = () => `${({ tuck: closedBot() ? 'korobka-yazychok-dno-zamok' : 'korobka-yazychki', tele: 'kryshka-dno', sleeve: 'futlyar' })[boxType]}_${f1(params.W)}x${f1(params.L)}x${f1(params.D)}`.replace(/\./g, ',');
   document.getElementById('ex-svg').addEventListener('click', () => {
     const sh = sheetAny(params);
     saveFile(baseName() + '.svg', buildSVG(sh, { design: designImages }));
