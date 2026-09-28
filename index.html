@@ -748,6 +748,36 @@
     mesh.visible = hangerOn();
     return mesh;
   }
+  // Дно-замок в 3D: четыре клапана той же формы, что в развёртке, каждый
+  // на своей петле у нижнего края стенки. Светлый контур — чтобы на чёрном
+  // было видно, как паз, язык и крючки сцепляются.
+  const lockM = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.7, side: THREE.DoubleSide });
+  const lockEdgeM = new THREE.LineBasicMaterial({ color: 0xd9d6d0 });
+  function lockFlap(pts, basis, y, parent) {
+    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([u, v]) => s.lineTo(u, v));
+    const g = new THREE.ShapeGeometry(s);
+    const m = new THREE.Matrix4().set(...basis[0], 0, 0, 0, 0, y, ...basis[1], 0, 0, 0, 0, 1);
+    g.applyMatrix4(m);
+    const mesh = new THREE.Mesh(g, lockM); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
+    parent.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), lockEdgeM));
+  }
+  function buildLock3D(q, boxG) {
+    const { W, D } = q, k = lockDims(q), n = D * 0.25;
+    const slot = [[-W / 2, 0], [W / 2, 0], [W / 2, k.hS], [W * 0.18, k.hS], [W * 0.18, k.hS - n], [-W * 0.18, k.hS - n], [-W * 0.18, k.hS], [-W / 2, k.hS]];
+    const tongue = [[-W / 2, 0], [W / 2, 0], [W / 2, D * 0.08], [W * 0.14, D * 0.6], [W * 0.18, k.hT], [-W * 0.18, k.hT], [-W * 0.14, D * 0.6], [-W / 2, D * 0.08]];
+    const hook = [[-D / 2, 0], [D / 2, 0], [D / 2, k.hB * 0.2], [D * 0.1, k.hB * 0.72], [D * 0.22, k.hB], [-D * 0.22, k.hB], [-D * 0.1, k.hB * 0.72], [-D / 2, k.hB * 0.2]];
+    // порядок сборки = порядок слоёв: крючки внутри, затем клапан с пазом, снаружи язык
+    const back = new THREE.Group(); back.position.set(0, 0, -D / 2 + T); boxG.add(back);
+    lockFlap(slot, [[1, 0, 0], [0, 1, 0]], -T * 1.5, back);
+    const front = new THREE.Group(); front.position.set(0, 0, D / 2 - T); boxG.add(front);
+    lockFlap(tongue, [[1, 0, 0], [0, -1, 0]], -T * 2.5, front);
+    const hooks = [-1, 1].map(sx => {
+      const g = new THREE.Group(); g.position.set(sx * (W / 2 - T), 0, 0); boxG.add(g);
+      lockFlap(hook, [[0, -sx, 0], [1, 0, 0]], -T * 0.5, g);
+      return { sx, g };
+    });
+    return { back, front, hooks };
+  }
   function buildTuck(p, keepView) {
     const q = deriveTuck(p);
     resetRoot();
@@ -771,8 +801,14 @@
       slab(dh, T, D - 4, F({ 3: faceMat('tuck', rb, '', true), 2: innerM }), [-sx * dh / 2, -T / 2, 0], fb);
       flaps.push({ sx, ft, fb });
     });
+    let lock = null;
+    if (q.closed) {
+      botG.visible = false;
+      flaps.forEach(({ fb }) => { fb.visible = false; });
+      lock = buildLock3D(q, boxG);
+    }
     hangerMesh = q.hangOK ? hangerMeshFor(q, H, D, 'tuck', boxG) : null;
-    tuckParts = { boxG, topG, botG, flaps };
+    tuckParts = { boxG, topG, botG, flaps, lock };
     dims = { type: 'tuck', W, H, D, q };
     repaint(); pose(t);
     if (!keepView) frame();
@@ -886,15 +922,26 @@
     if (dims.type === 'tuck') {
       const { H, D } = dims, { boxG, topG, botG, flaps } = tuckParts;
       if (dims.q.closed) {
-        topG.rotation.x = seg(t, 0.03, 0.45) * R(125);
-        const ftc = seg(t, 0.4, 0.7);
-        botG.rotation.x = 0; boxG.position.y = 0;
-        boxG.rotation.x = seg(t, 0.72, 0.97) * R(28);
-        flaps.forEach(({ sx, ft: a, fb: b }) => { a.rotation.z = sx * -ftc * R(100); b.rotation.z = 0; });
-        setStep(t <= 0.02 ? 0 : t < 0.42 ? 1 : t < 0.72 ? 2 : 3);
+        const { lock } = tuckParts;
+        topG.rotation.x = seg(t, 0.03, 0.3) * R(125);
+        const ftc = seg(t, 0.2, 0.35);
+        flaps.forEach(({ sx, ft: a }) => { a.rotation.z = sx * -ftc * R(100); });
+        botG.rotation.x = 0;
+        // дно выезжает в центр кадра и смотрит в камеру, корпус уходит назад
+        const e = seg(t, 0.38, 0.6);
+        boxG.rotation.order = 'YXZ';
+        boxG.rotation.set(-e * R(100), e * R(35), 0);
+        boxG.position.set(0, e * (H + D) * 0.55, 0);
+        if (lock) {
+          const o = i => seg(t, 0.64 + i * 0.1, 0.8 + i * 0.1) * R(65);
+          lock.front.rotation.x = -o(0);
+          lock.back.rotation.x = o(1);
+          lock.hooks.forEach(({ sx, g }) => { g.rotation.z = sx * o(2); });
+        }
+        setStep(t <= 0.02 ? 0 : t < 0.36 ? 1 : t < 0.62 ? 2 : 3);
         return;
       }
-      boxG.rotation.x = 0;
+      boxG.rotation.x = 0; boxG.position.z = 0;
       topG.rotation.x = seg(t, 0.03, 0.28) * R(125);
       const ft = seg(t, 0.2, 0.38);
       const lift = seg(t, 0.42, 0.58);
@@ -1011,7 +1058,7 @@
     document.getElementById('f-zones').hidden = boxType !== 'sleeve';
     document.getElementById('f-closedbot').hidden = boxType !== 'tuck';
     document.getElementById('f-dh').hidden = boxType !== 'tuck';
-    STEPS.tuck = closedBot() ? ['Закрыта', 'Крышка открыта', 'Клапаны открыты', 'Внутри'] : ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
+    STEPS.tuck = closedBot() ? ['Закрыта', 'Крышка открыта', 'Дно-замок', 'Замок раскрыт'] : ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
     document.getElementById('f-hanger').hidden = boxType === 'tele';
     Object.entries(MINS[boxType]).forEach(([k, v]) => { inp[k].min = v; });
     Object.entries(LABELS[boxType]).forEach(([k, v]) => { document.querySelector('#f-' + k + ' span').textContent = v; });
