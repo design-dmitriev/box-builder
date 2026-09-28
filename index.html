@@ -478,9 +478,10 @@
     const W = p.W, H = p.L, D = p.D;
     const tuck = Math.min(16, Math.max(10, D * 0.75));
     const closed = closedBot();
-    // Боковые клапаны — от размеров коробки: не длиннее половины ширины
-    // (с двух сторон сходятся встык, без нахлёста) и половины высоты.
-    const dh = Math.min(Math.max(6, Math.min(15, W / 2 - 2)), W / 2, H * 0.5);
+    // Боковые клапаны сразу доходят почти до центра: между ними 1 мм,
+    // без нахлёста; не длиннее половины высоты.
+    const DH_GAP = 1;
+    const dh = Math.max(3, Math.min(W / 2 - DH_GAP / 2, H * 0.5));
     const hangW = Math.min(50, W - 6), hangOK = hangW >= 40;
     return { ...p, W, H, D, tuck, dh, hangW, hangOK, closed };
   }
