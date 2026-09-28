@@ -477,12 +477,15 @@
   const dustUp = (x, y, w, h) => P([[x, y], [x + 1.5, y - 4], [x + 4, y - h], [x + w - 3, y - h], [x + w - 0.5, y - 6], [x + w, y]]);
   function deriveTuck(p) {
     const W = p.W, H = p.L, D = p.D;
-    const auto = Math.min(16, Math.max(10, D * 0.75));
-    const tuck = isFinite(p.tk) && p.tk > 0 ? Math.min(Math.max(p.tk, 6), 40, H * 0.5) : auto;
+    // Язычок не длиннее глубины коробки — иначе он упирается/перекрывается внутри.
+    const tkMax = Math.min(D, H * 0.5);
+    const auto = Math.min(16, Math.max(10, D * 0.75), tkMax);
+    const want = isFinite(p.tk) && p.tk > 0 ? Math.max(p.tk, 6) : auto;
+    const tuck = Math.min(want, tkMax), tkCut = want > tkMax + 0.01;
     const closed = closedBot();
     const dh = Math.max(6, Math.min(15, W / 2 - 2));
     const hangW = Math.min(50, W - 6), hangOK = hangW >= 40;
-    return { ...p, W, H, D, tuck, dh, hangW, hangOK, closed };
+    return { ...p, W, H, D, tuck, tkCut, dh, hangW, hangOK, closed };
   }
   function tuckBox(q, x0, yT, hanger) {
     const { W, H, D, tuck, dh } = q;
@@ -954,7 +957,7 @@
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
-      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · пылевые клапаны ${fmt(q.dh)} мм · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
+      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм${q.tkCut ? ' (ограничен глубиной коробки)' : ''} · пылевые клапаны ${fmt(q.dh)} мм · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
       return;
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
