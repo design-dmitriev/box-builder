@@ -951,7 +951,8 @@
   function readParams() {
     const p = {}; let ok = true;
     ids.forEach(k => {
-      if (optional(k) && String(inp[k].value).trim() === '') { p[k] = 0; inp[k].classList.remove('bad'); return; }
+      const raw = String(inp[k].value).trim();
+      if (optional(k) && (raw === '' || raw === inp[k].dataset.auto)) { p[k] = 0; inp[k].classList.remove('bad'); return; }
       const v = parseFloat(String(inp[k].value).replace(',', '.'));
       const bad = !isFinite(v) || v < +inp[k].min || v > +inp[k].max;
       inp[k].classList.toggle('bad', bad); if (bad) ok = false; p[k] = v;
@@ -967,7 +968,9 @@
       return;
     }
     if (boxType === 'tuck') {
-      inp.dh.placeholder = 'полные · ' + fmt(q.dhFull);
+      const full = String(Math.round(q.dhFull * 10) / 10);
+      inp.dh.max = full;
+      if (q.dhFullUsed) { inp.dh.value = full; inp.dh.dataset.auto = full; } else { delete inp.dh.dataset.auto; }
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
