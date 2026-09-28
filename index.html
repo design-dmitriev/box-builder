@@ -242,9 +242,9 @@
       <button class="link" id="p-reset" type="button" title="Вернуть размеры по умолчанию">85 × 150 × 20</button>
     </div>
     <div class="fields">
-      <label class="num" id="f-W"><span>Ширина, мм</span><input id="p-W" type="number" step="0.5" min="30" max="250" inputmode="decimal"></label>
-      <label class="num" id="f-L"><span>Высота, мм</span><input id="p-L" type="number" step="0.5" min="30" max="320" inputmode="decimal"></label>
-      <label class="num" id="f-D"><span>Толщина, мм</span><input id="p-D" type="number" step="0.5" min="8" max="80" inputmode="decimal"></label>
+      <label class="num" id="f-W"><span>Ширина, мм</span><input id="p-W" type="number" step="0.5" min="6" max="2000" inputmode="decimal"></label>
+      <label class="num" id="f-L"><span>Высота, мм</span><input id="p-L" type="number" step="0.5" min="7" max="2000" inputmode="decimal"></label>
+      <label class="num" id="f-D"><span>Толщина, мм</span><input id="p-D" type="number" step="0.5" min="6" max="2000" inputmode="decimal"></label>
       <label class="num" id="f-nw"><span>Вырез ш., мм</span><input id="p-nw" type="number" step="0.5" min="0" max="80" inputmode="decimal"></label>
       <label class="num" id="f-nh"><span>Вырез гл., мм</span><input id="p-nh" type="number" step="0.5" min="0" max="40" inputmode="decimal"></label>
       <label class="num" id="f-dh"><span>Бок. клапаны, мм</span><input id="p-dh" type="number" step="0.5" min="3" max="200" inputmode="decimal"></label>
@@ -959,12 +959,19 @@
     });
     return ok ? p : null;
   }
+  // Минимумы — из геометрии деталей (мм), ниже контур вырубки ломается:
+  // клеевой клапан скошен на 10 мм с обеих сторон (панель > 20 мм),
+  // клапаны RTE рисуются с уступами 4/6 мм (глубина ≥ 8, клапан ≥ 6 → ширина ≥ 13),
+  // лотки сужаются на 3 мм с каждой стороны, клапаны лотков на 1–1,5 мм уже борта.
+  // Сверху геометрия не ограничивает — предупреждаем только о размере листа.
+  const MINS = { sleeve: { W: 6, L: 17, D: 6 }, tuck: { W: 13, L: 21, D: 8 }, tele: { W: 7, L: 7, D: 6 } };
+  const sheetWarn = sh => (Math.max(sh.TW, sh.TH) > 1000 || Math.min(sh.TW, sh.TH) > 700) ? ' · лист больше B1 (700 × 1000 мм) — уточните формат у типографии' : '';
   function updateTexts(q) {
     if (boxType === 'tele') {
       document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
       document.getElementById('h-info').textContent = `Коробка крышка-дно · крышка ${fmt(q.LID[0])} × ${fmt(q.LID[1])} × ${fmt(q.LID[2])} · дно ${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} мм`;
       const sh = sheetTele(params);
-      document.getElementById('derived').textContent = `Дно (внутр. размер под товар ≈ ${fmt(q.BASE[0] - 0.8)} × ${fmt(q.BASE[1] - 0.8)} × ${fmt(q.BASE[2] - 0.4)}) · крышка на всю высоту · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм`;
+      document.getElementById('derived').textContent = `Дно (внутр. размер под товар ≈ ${fmt(q.BASE[0] - 0.8)} × ${fmt(q.BASE[1] - 0.8)} × ${fmt(q.BASE[2] - 0.4)}) · крышка на всю высоту · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм${sheetWarn(sh)}`;
       return;
     }
     if (boxType === 'tuck') {
@@ -974,7 +981,7 @@
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
-      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
+      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм${sheetWarn(sh)}` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
       return;
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
@@ -985,7 +992,7 @@
     if (!q.hangOK) notes.push('подвес не помещается при такой ширине');
     const sh = sheet(params);
     document.getElementById('derived').textContent =
-      `Внутренняя коробка (мин. размер): ${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (notes.length ? ' · ' + notes.join(' · ') : '');
+      `Внутренняя коробка (мин. размер): ${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм${sheetWarn(sh)}` + (notes.length ? ' · ' + notes.join(' · ') : '');
   }
   let timer = null;
   allIds.forEach(k => inp[k].addEventListener('input', () => {
@@ -1006,6 +1013,7 @@
     document.getElementById('f-dh').hidden = boxType !== 'tuck';
     STEPS.tuck = closedBot() ? ['Закрыта', 'Крышка открыта', 'Клапаны открыты', 'Внутри'] : ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
     document.getElementById('f-hanger').hidden = boxType === 'tele';
+    Object.entries(MINS[boxType]).forEach(([k, v]) => { inp[k].min = v; });
     Object.entries(LABELS[boxType]).forEach(([k, v]) => { document.querySelector('#f-' + k + ' span').textContent = v; });
     document.getElementById('steps').innerHTML = STEPS[boxType].map((s, i) => `<span${i === 0 ? ' class="on"' : ''}>${s}</span>`).join('');
     document.getElementById('p-reset').textContent = `${fmt(DEF.W)} × ${fmt(DEF.L)} × ${fmt(DEF.D)}`;
