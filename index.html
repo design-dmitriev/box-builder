@@ -602,13 +602,14 @@
     const Lb = Math.max(6, H - SLOT_H);                       // крышка на задней стенке кончается на SLOT_H выше нижнего сгиба
     const eY = Math.max(5, Math.min(22, W * 0.22));           // ушки внутренней задней стенки
     const dhB = Math.max(4, Math.min(B * 0.45, 24));          // ушки боковин снизу
-    return { ...p, W, H, B, Tt, S, phi, tpCut, tk, Lb, eY, dhB };
+    const eL = Math.max(6, Math.min(30, W * 0.28));           // большие ушки крышки на задней стенке
+    return { ...p, W, H, B, Tt, S, phi, tpCut, tk, Lb, eY, dhB, eL };
   }
   // Развёртка одной полосой: крышка (язычок → задняя → верх) — лицевая — дно — внутренняя задняя;
   // боковины-трапеции сидят на лицевой, на них снизу ушки; на внутренней задней тоже ушки.
   // Все детали в «плоской» системе координат (y вверх), потом переводятся в SVG.
   function wedgeGeo(q) {
-    const { W, H, B, Tt, S, phi, tk, Lb, eY, dhB } = q;
+    const { W, H, B, Tt, S, phi, tk, Lb, eY, dhB, eL } = q;
     const c = Math.cos(phi), s = Math.sin(phi), PI2 = Math.PI / 2;
     const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
     const place = (p0, p1, out, pts) => { const w = vLen(vSub(p1, p0)), u = vMul(vSub(p1, p0), 1 / w); return pts.map(([a, b]) => vAdd(vAdd(p0, vMul(u, a)), vMul(out, b))); };
@@ -623,6 +624,8 @@
       earSL: place([0, 0], [-B * c, B * s], [-s, -c], earST(B, dhB)),
       earYR: place([W, -B - H], [W, -B], [1, 0], earST(H, eY)),
       earYL: place([0, -B], [0, -B - H], [-1, 0], earST(H, eY)),
+      earLR: place([W, yL], [W, yT], [1, 0], earST(Lb, eL)),
+      earLL: place([0, yT], [0, yL], [-1, 0], earST(Lb, eL)),
     };
     const slot = rect(0.6, -B - SLOT_H - 1, W - 0.6, -B - SLOT_H + 1);
     // Дерево сгибов: родитель, линия сгиба и угол в собранной коробке (от плоского листа).
@@ -639,11 +642,14 @@
       { k: 'backIn', par: 'bottom', h: [[0, -B], [W, -B]], ang: PI2, hole: slot },
       { k: 'earYR', par: 'backIn', h: [[W, -B - H], [W, -B]], ang: PI2, tex: 'eY2', avg: true },
       { k: 'earYL', par: 'backIn', h: [[0, -B], [0, -B - H]], ang: PI2, tex: 'eY1', avg: true },
+      { k: 'earLR', par: 'lidBack', h: [[W, yL], [W, yT]], ang: PI2, tex: 'eL2', avg: true },
+      { k: 'earLL', par: 'lidBack', h: [[0, yT], [0, yL]], ang: PI2, tex: 'eL1', avg: true },
     ].map(n => ({ ...n, poly: parts[n.k] }));
     const creases = [
       [0, 0, W, 0], [0, -B, W, -B], [0, S, W, S], [0, yL, W, yL], [1, yT, W - 1, yT],
       [W, 0, W, S], [0, 0, 0, S],
       [W, 0, W + B * c, B * s], [0, 0, -B * c, B * s], [W, -B - H, W, -B], [0, -B - H, 0, -B],
+      [W, yL, W, yT], [0, yL, 0, yT],
     ];
     // Геометрия печати: o — верхний левый угол, u — вправо, v — вниз (для взгляда на печатную сторону снаружи).
     const rects = {
@@ -671,7 +677,7 @@
     const creases = g.creases.map(([a, b, c2, e]) => { const [x1, y1] = cv([a, b]), [x2, y2] = cv([c2, e]); return [x1, y1, x2, y2]; });
     const rects = {};
     for (const [k, r] of Object.entries(g.rects)) rects[k] = { o: cv(r.o), u: vv(r.u), v: vv(r.v), w: r.w, h: r.h };
-    for (const [k, pk] of [['tab', 'tab'], ['eS1', 'earSL'], ['eS2', 'earSR'], ['eY1', 'earYL'], ['eY2', 'earYR']]) {
+    for (const [k, pk] of [['tab', 'tab'], ['eS1', 'earSL'], ['eS2', 'earSR'], ['eY1', 'earYL'], ['eY2', 'earYR'], ['eL1', 'earLL'], ['eL2', 'earLR']]) {
       const pp = g.parts[pk].map(cv), xs = pp.map(z => z[0]), ys = pp.map(z => z[1]);
       rects[k] = [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
     }
@@ -706,7 +712,7 @@
     ];
     const notes = [
       `Стенки: лицевая (наклонная) ${f1(q.W)} × ${f1(q.S)}, дно ${f1(q.W)} × ${f1(q.B)}, внутренняя задняя ${f1(q.W)} × ${f1(q.H)} мм; боковины — трапеции ${f1(q.B)} (низ) / ${f1(q.Tt)} (верх) × ${f1(q.H)} мм.`,
-      'Крышка одним куском закрывает верх и заднюю стенку снаружи (на ней печатается «ЗАДНЯЯ»); язычок продевается в прорезь у нижнего края внутренней стенки. Ушки боковин и внутренней стенки загибаются внутрь.',
+      'Крышка одним куском закрывает верх и заднюю стенку снаружи (на ней печатается «ЗАДНЯЯ»); язычок продевается в прорезь у нижнего края внутренней стенки. Ушки боковин, крышки и внутренней стенки загибаются внутрь.',
       'Картон 0,3–0,4 мм; перед печатью сверить со штампом типографии.',
     ];
     const ly = bottom + 14;
@@ -1171,11 +1177,11 @@
   function pose(t) {
     if (!dims) return;
     if (dims.type === 'wedge') {
-      // как на видео: вынимаем язычок → раскрываем крышку → ушки → боковины → раскладываем всё в полосу
+      // как на видео: язычок → крышка целиком (задняя+верх) откидывается вверх → внутренняя задняя ложится → боковины → лицевая → ушки
       const f = (x, y) => 1 - segS(t, x, y);
-      const F = { tab: f(0.02, 0.14), lidBack: f(0.1, 0.3), lidTop: f(0.26, 0.42), earSR: f(0.36, 0.5), earSL: f(0.36, 0.5), earYR: f(0.4, 0.54), earYL: f(0.4, 0.54), sideR: f(0.5, 0.72), sideL: f(0.5, 0.72), backIn: f(0.6, 0.82), front: f(0.72, 0.96) };
+      const F = { tab: f(0.02, 0.1), lidBack: f(0.06, 0.2), lidTop: f(0.06, 0.26), backIn: f(0.3, 0.46), sideR: f(0.48, 0.66), sideL: f(0.48, 0.66), front: f(0.66, 0.84), earSR: f(0.86, 1), earSL: f(0.86, 1), earYR: f(0.86, 1), earYL: f(0.86, 1), earLR: f(0.86, 1), earLL: f(0.86, 1) };
       for (const k in wedgeParts) { const n = wedgeParts[k]; if (n.axis) n.g.quaternion.setFromAxisAngle(n.axis, n.sign * n.ang * (k in F ? F[k] : 1)); }
-      setStep(t <= 0.02 ? 0 : t < 0.44 ? 1 : t < 0.75 ? 2 : 3);
+      setStep(t <= 0.02 ? 0 : t < 0.3 ? 1 : t < 0.84 ? 2 : 3);
       return;
     }
     if (dims.type === 'tele') {
