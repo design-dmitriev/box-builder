@@ -571,7 +571,7 @@
   // ================= wedge box (клин: призма-трапеция, крышка с язычком на всю заднюю стенку) =================
   // Задняя стенка вертикальная (H), лицевая наклонная, боковины — прямоугольные трапеции.
   // Сборка по видео: крышка сверху идёт по верху и всей задней стенке, язычок — в прорезь внизу.
-  const SLOT_H = 5.5;
+  const YI = 1, SLOT_H = 5.5, TABX = 3;                             // прорезь под язычок; язычок уже крышки на 3 мм с каждой стороны (там стоят ушки)
   const vAdd = (a, b) => [a[0] + b[0], a[1] + b[1]], vSub = (a, b) => [a[0] - b[0], a[1] - b[1]], vMul = (a, k) => [a[0] * k, a[1] * k];
   const vLen = a => Math.hypot(a[0], a[1]);
   const areaSigned = pts => pts.reduce((s, q, i) => { const r = pts[(i + 1) % pts.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0) / 2;
@@ -616,18 +616,18 @@
     const yL = S + Tt, yT = yL + Lb;
     const parts = {
       bottom: rect(0, -B, W, 0), front: rect(0, 0, W, S), lidTop: rect(0, S, W, yL), lidBack: rect(0, yL, W, yT),
-      tab: place([0, yT], [W, yT], [0, 1], tongueST(W, tk)),
-      backIn: rect(0, -B - H, W, -B),
+      tab: place([TABX, yT], [W - TABX, yT], [0, 1], tongueST(W - 2 * TABX, tk)),
+      backIn: rect(YI, -B - H, W - YI, -B),
       sideR: [[W, 0], [W, S], [W + Tt * c, S + Tt * s], [W + B * c, B * s]],
       sideL: [[0, 0], [-B * c, B * s], [-Tt * c, S + Tt * s], [0, S]],
       earSR: place([W, 0], [W + B * c, B * s], [s, -c], earST(B, dhB)),
       earSL: place([0, 0], [-B * c, B * s], [-s, -c], earST(B, dhB)),
-      earYR: place([W, -B - H], [W, -B], [1, 0], earST(H, eY)),
-      earYL: place([0, -B], [0, -B - H], [-1, 0], earST(H, eY)),
+      earYR: place([W - YI, -B - H], [W - YI, -B], [1, 0], earST(H, eY)),
+      earYL: place([YI, -B], [YI, -B - H], [-1, 0], earST(H, eY)),
       earLR: place([W, yL], [W, yT], [1, 0], earST(Lb, eL)),
       earLL: place([0, yT], [0, yL], [-1, 0], earST(Lb, eL)),
     };
-    const slot = rect(0.6, -B - SLOT_H - 1, W - 0.6, -B - SLOT_H + 1);
+    const slot = rect(TABX - 0.4, -B - SLOT_H - 1, W - TABX + 0.4, -B - SLOT_H + 1);
     // Дерево сгибов: родитель, линия сгиба и угол в собранной коробке (от плоского листа).
     const nodes = [
       { k: 'bottom' },
@@ -637,18 +637,18 @@
       { k: 'tab', par: 'lidBack', h: [[0, yT], [W, yT]], ang: PI2, tex: 'tab', avg: true },
       { k: 'sideR', par: 'front', h: [[W, 0], [W, S]], ang: PI2, tex: 's2' },
       { k: 'sideL', par: 'front', h: [[0, 0], [0, S]], ang: PI2, tex: 's1' },
-      { k: 'earSR', par: 'sideR', h: [[W, 0], [W + B * c, B * s]], ang: PI2, tex: 'eS2', avg: true },
-      { k: 'earSL', par: 'sideL', h: [[0, 0], [-B * c, B * s]], ang: PI2, tex: 'eS1', avg: true },
-      { k: 'backIn', par: 'bottom', h: [[0, -B], [W, -B]], ang: PI2, hole: slot },
-      { k: 'earYR', par: 'backIn', h: [[W, -B - H], [W, -B]], ang: PI2, tex: 'eY2', avg: true },
-      { k: 'earYL', par: 'backIn', h: [[0, -B], [0, -B - H]], ang: PI2, tex: 'eY1', avg: true },
-      { k: 'earLR', par: 'lidBack', h: [[W, yL], [W, yT]], ang: PI2, tex: 'eL2', avg: true },
-      { k: 'earLL', par: 'lidBack', h: [[0, yT], [0, yL]], ang: PI2, tex: 'eL1', avg: true },
+      { k: 'earSR', par: 'sideR', h: [[W, 0], [W + B * c, B * s]], ang: PI2, tex: 'eS2', avg: true, lift: 1 },
+      { k: 'earSL', par: 'sideL', h: [[0, 0], [-B * c, B * s]], ang: PI2, tex: 'eS1', avg: true, lift: 1 },
+      { k: 'backIn', par: 'bottom', h: [[0, -B], [W, -B]], ang: PI2, hole: slot, lift: 1.3 },
+      { k: 'earYR', par: 'backIn', h: [[W - YI, -B - H], [W - YI, -B]], ang: PI2, tex: 'eY2', avg: true },
+      { k: 'earYL', par: 'backIn', h: [[YI, -B], [YI, -B - H]], ang: PI2, tex: 'eY1', avg: true },
+      { k: 'earLR', par: 'lidBack', h: [[W, yL], [W, yT]], ang: PI2, tex: 'eL2', avg: true, lift: 1.3 },
+      { k: 'earLL', par: 'lidBack', h: [[0, yT], [0, yL]], ang: PI2, tex: 'eL1', avg: true, lift: 1.3 },
     ].map(n => ({ ...n, poly: parts[n.k] }));
     const creases = [
       [0, 0, W, 0], [0, -B, W, -B], [0, S, W, S], [0, yL, W, yL], [1, yT, W - 1, yT],
       [W, 0, W, S], [0, 0, 0, S],
-      [W, 0, W + B * c, B * s], [0, 0, -B * c, B * s], [W, -B - H, W, -B], [0, -B - H, 0, -B],
+      [W, 0, W + B * c, B * s], [0, 0, -B * c, B * s], [W - YI, -B - H, W - YI, -B], [YI, -B - H, YI, -B],
       [W, yL, W, yT], [0, yL, 0, yT],
     ];
     // Геометрия печати: o — верхний левый угол, u — вправо, v — вниз (для взгляда на печатную сторону снаружи).
@@ -695,7 +695,7 @@
     L(rc(gr.lidBack), [-1, 0], 'ЗАДНЯЯ', 6, -3.5); L(rc(gr.lidBack), [-1, 0], `${f1(W)} × ${f1(H)}`, 3.5, 3.5);
     L(rc(gr.s2), [c, s], 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s2), [c, s], `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
     L(rc(gr.s1), [c, -s], 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s1), [c, -s], `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
-    L([W / 2, yT + q.tk * 0.45], [1, 0], 'язычок', 3, 0);
+    L([W / 2, yT + q.tk * 0.45], [1, 0], 'язычок', Math.min(3, W / 12), 0);
     L([W / 2, -B - H / 2], [1, 0], 'ВНУТРЕННЯЯ СТЕНКА', 4, -2); L([W / 2, -B - H / 2], [1, 0], 'печать не нужна', 3, 3);
     return { outline, bleed, printFill, holes, creases, options: [], panels, labels, rects, zones: [], w: maxx - minx, h: maxy - miny };
   }
@@ -820,7 +820,7 @@
   scene.fog = new THREE.Fog(0xd8d4d0, 1200, 3000);
   const camera = new THREE.PerspectiveCamera(32, 1, 1, 8000);
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.minDistance = 120; controls.maxDistance = 2500; controls.maxPolarAngle = Math.PI * 0.52;
+  controls.enableDamping = true; controls.minDistance = 120; controls.maxDistance = 2500; controls.maxPolarAngle = Math.PI * 0.97;
   scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2530, 0.55));
   const key = new THREE.DirectionalLight(0xffffff, 0.95);
   key.position.set(220, 420, 300); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
@@ -828,7 +828,7 @@
   scene.add(key);
   const rim = new THREE.DirectionalLight(0xffd6e8, 0.35); rim.position.set(-300, 200, -250); scene.add(rim);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.ShadowMaterial({ opacity: 0.22 }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -30; ground.receiveShadow = true; scene.add(ground);
 
   const blackM = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.62 });
   const innerM = new THREE.MeshStandardMaterial({ color: 0xe6e2da, roughness: 0.9 });
@@ -924,10 +924,10 @@
       const loc = ([x, y]) => [x - H0[0], y - H0[1]];
       const sh = shapeFrom(nd.poly.map(pt => { const [a, b] = loc(pt); return [a, -b]; }));
       if (nd.hole) sh.holes.push(new THREE.Path(nd.hole.map(pt => { const [a, b] = loc(pt); return new THREE.Vector2(a, -b); })));
-      const geo = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false }); geo.rotateX(-Math.PI / 2);
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false }); geo.rotateX(-Math.PI / 2); geo.translate(0, (nd.lift || 0) * T, 0);
       const mesh = new THREE.Mesh(geo, [innerD, blackD]); mesh.castShadow = mesh.receiveShadow = true; grp.add(mesh);
       if (nd.tex) {
-        const pg = new THREE.ShapeGeometry(shapeFrom(nd.poly.map(loc))); pg.rotateX(Math.PI / 2); pg.translate(0, -0.02, 0);
+        const pg = new THREE.ShapeGeometry(shapeFrom(nd.poly.map(loc))); pg.rotateX(Math.PI / 2); pg.translate(0, -0.02 + (nd.lift || 0) * T, 0);
         const r = g.rects[nd.tex];
         if (r) {
           const pos = pg.attributes.position, uv = new Float32Array(pos.count * 2);
