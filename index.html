@@ -600,35 +600,54 @@
     const tr = l.rot ? ` transform="rotate(${l.rot} ${l.x.toFixed(2)} ${l.y.toFixed(2)})"` : '';
     return `<text x="${l.x.toFixed(2)}" y="${l.y.toFixed(2)}" font-size="${l.size}" fill="${l.fill}" text-anchor="${l.anchor || 'middle'}"${l.bold ? ' font-weight="bold"' : ''} font-family="${font}"${tr}>${esc(l.s)}</text>`;
   }
+  // Слои экспорта — ОДИН список для всех типов коробок, включая будущие.
+  // Новый тип коробки просто отдаёт pieces с теми же полями (outline, holes,
+  // bleed, printFill, panels, creases, options, zones, labels) — слои соберутся
+  // сами, здесь и в PDF ничего добавлять не нужно. Порядок — снизу вверх.
+  // NOPRINT — служебные слои, в печать не идут.
+  const SVG_LAYERS = [
+    'BACKGROUND',          // фон коробки: заливка области печати с вылетами
+    'DESIGN_PREVIEW',      // загруженный макет (при экспорте «с текущим дизайном»)
+    'BLEED',               // вылеты 3 мм
+    'SAFE',                // безопасная зона
+    'CREASE',              // биговка
+    'OPTION_CREASE',       // биговка-опция
+    'CUT',                 // вырубка
+    'ARROW_ZONES_NOPRINT', // зоны под стрелки
+    'TEXT_ON_BOX',         // надписи на панелях коробки
+    'TEXT_SHEET_NOPRINT',  // заголовки листа и примечания
+    'LEGEND_NOPRINT',      // линии легенды
+  ];
   function buildSVG(sh, opts) {
     const font = opts.font || 'Arial, Helvetica, sans-serif';
     const o = [`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${sh.TW.toFixed(2)}mm" height="${sh.TH.toFixed(2)}mm" viewBox="0 0 ${sh.TW.toFixed(2)} ${sh.TH.toFixed(2)}">`];
     const names = { sleeveA: 'OUTER_A_EUROHANGER', sleeveB: 'OUTER_B_PLAIN', lid: 'INNER_LID', base: 'INNER_BASE', tuck: 'TUCK_BOX' };
-    const lab = [];
+    const L = Object.fromEntries(SVG_LAYERS.map(k => [k, []]));
     for (const [k, pc] of Object.entries(sh.pieces)) {
-      const n = names[k];
-      o.push(`<g id="${n}">`);
+      const n = names[k] || k.toUpperCase();
       if (opts.design) {
         const imgs = opts.design(k, pc);
-        if (imgs) o.push(`<g id="${n}_DESIGN_PREVIEW">${imgs}</g>`);
+        if (imgs) L.DESIGN_PREVIEW.push(`<g id="${n}_DESIGN_PREVIEW">${imgs}</g>`);
       }
-      o.push(`<g id="${n}_BLEED"><path d="${d(pc.bleed)}" fill="none" stroke="${COL.bleed}" stroke-width="0.25"/></g>`);
-      o.push(`<g id="${n}_SAFE">${pc.panels.map(p => `<path d="${d(p)}" fill="none" stroke="${COL.safe}" stroke-width="0.2" stroke-dasharray="1,1"/>`).join('')}</g>`);
-      o.push(`<g id="${n}_CREASE"><path d="${segs(pc.creases)}" fill="none" stroke="${COL.crease}" stroke-width="0.35" stroke-dasharray="3,1.5"/></g>`);
-      if (pc.options.length) o.push(`<g id="${n}_OPTION_CREASE"><path d="${segs(pc.options)}" fill="none" stroke="${COL.opt}" stroke-width="0.35" stroke-dasharray="4,1,1,1"/></g>`);
-      o.push(`<g id="${n}_CUT"><path d="${d(pc.outline)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>${pc.holes.length ? `<path d="${d(pc.holes)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>` : ''}</g>`);
-      if (pc.zones.length) o.push(`<g id="${n}_ARROW_ZONES_NOPRINT">${pc.zones.map(([x, y, w, h]) => `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}" fill="${COL.zone}" fill-opacity="0.35" stroke="${COL.zone}" stroke-width="0.3" stroke-dasharray="1,0.6"/>`).join('')}</g>`);
-      o.push('</g>');
-      lab.push(...pc.labels);
+      L.BACKGROUND.push(`<g id="${n}_BACKGROUND"><path d="${d(pc.printFill || pc.bleed)}" fill="#ffffff" fill-rule="evenodd" stroke="none"/></g>`);
+      L.BLEED.push(`<g id="${n}_BLEED"><path d="${d(pc.bleed)}" fill="none" stroke="${COL.bleed}" stroke-width="0.25"/></g>`);
+      L.SAFE.push(`<g id="${n}_SAFE">${pc.panels.map(p => `<path d="${d(p)}" fill="none" stroke="${COL.safe}" stroke-width="0.2" stroke-dasharray="1,1"/>`).join('')}</g>`);
+      L.CREASE.push(`<g id="${n}_CREASE"><path d="${segs(pc.creases)}" fill="none" stroke="${COL.crease}" stroke-width="0.35" stroke-dasharray="3,1.5"/></g>`);
+      if (pc.options.length) L.OPTION_CREASE.push(`<g id="${n}_OPTION_CREASE"><path d="${segs(pc.options)}" fill="none" stroke="${COL.opt}" stroke-width="0.35" stroke-dasharray="4,1,1,1"/></g>`);
+      L.CUT.push(`<g id="${n}_CUT"><path d="${d(pc.outline)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>${pc.holes.length ? `<path d="${d(pc.holes)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>` : ''}</g>`);
+      if (pc.zones.length) L.ARROW_ZONES_NOPRINT.push(`<g id="${n}_ARROW_ZONES_NOPRINT">${pc.zones.map(([x, y, w, h]) => `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}" fill="${COL.zone}" fill-opacity="0.35" stroke="${COL.zone}" stroke-width="0.3" stroke-dasharray="1,0.6"/>`).join('')}</g>`);
+      if (pc.labels.length) L.TEXT_ON_BOX.push(`<g id="${n}_TEXT">${pc.labels.map(l => text(l, font)).join('')}</g>`);
     }
-    sh.heads.forEach(([x, y, s, size, bold]) => lab.push({ x, y, s, size, fill: COL.head, anchor: 'start', bold }));
-    sh.notes.forEach((s, i) => lab.push({ x: M, y: sh.ly + i * 5.5, s, size: 3.4, fill: COL.head, anchor: 'start' }));
+    const sheetText = [];
+    sh.heads.forEach(([x, y, s, size, bold]) => sheetText.push({ x, y, s, size, fill: COL.head, anchor: 'start', bold }));
+    sh.notes.forEach((s, i) => sheetText.push({ x: M, y: sh.ly + i * 5.5, s, size: 3.4, fill: COL.head, anchor: 'start' }));
     const hasZ = Object.values(sh.pieces).some(pc => pc.zones.length), hasO = Object.values(sh.pieces).some(pc => pc.options.length);
     const leg = [[COL.cut, null, 'Вырубка'], [COL.crease, '3,1.5', 'Биговка'], ...(hasO ? [[COL.opt, '4,1,1,1', 'Биговка-опция']] : []), [COL.bleed, null, 'Вылеты 3 мм'], [COL.safe, '1,1', 'Безоп. зона 3 мм'], ...(hasZ ? [[COL.zone, '1,0.6', 'Зона стрелки']] : [])];
     const yl = sh.ly + sh.notes.length * 5.5 + 5;
-    o.push('<g id="INFO_NOPRINT">' + leg.map(([c, da, s], i) => `<line x1="${M + i * 45}" y1="${yl}" x2="${M + i * 45 + 10}" y2="${yl}" stroke="${c}" stroke-width="0.6"${da ? ` stroke-dasharray="${da}"` : ''}/>`).join('') + '</g>');
-    leg.forEach(([, , s], i) => lab.push({ x: M + i * 45 + 12, y: yl + 1.2, s, size: 3.4, fill: COL.head, anchor: 'start' }));
-    o.push(`<g id="LABELS_NOPRINT">${lab.map(l => text(l, font)).join('')}</g>`);
+    L.LEGEND_NOPRINT.push(leg.map(([c, da], i) => `<line x1="${M + i * 45}" y1="${yl}" x2="${M + i * 45 + 10}" y2="${yl}" stroke="${c}" stroke-width="0.6"${da ? ` stroke-dasharray="${da}"` : ''}/>`).join(''));
+    leg.forEach(([, , s], i) => sheetText.push({ x: M + i * 45 + 12, y: yl + 1.2, s, size: 3.4, fill: COL.head, anchor: 'start' }));
+    L.TEXT_SHEET_NOPRINT.push(sheetText.map(l => text(l, font)).join(''));
+    SVG_LAYERS.forEach(name => { if (L[name].length) o.push(`<g id="${name}">${L[name].join('')}</g>`); });
     o.push('</svg>');
     return o.join('\n');
   }
@@ -1243,7 +1262,28 @@
       doc.addFileToVFS('LibSans.ttf', FONT_B64);
       doc.addFont('LibSans.ttf', 'LibSans', 'normal'); doc.addFont('LibSans.ttf', 'LibSans', 'bold');
       doc.setFont('LibSans');
-      await doc.svg(el, { x: 0, y: 0, width: sh.TW, height: sh.TH });
+      // Каждый слой рисуется отдельно и оборачивается в маркеры Optional Content
+      // (BDC/EMC), чтобы в Acrobat/Illustrator они были настоящими слоями PDF.
+      const layerEls = [...el.children].filter(c => c.tagName.toLowerCase() === 'g' && SVG_LAYERS.includes(c.id));
+      const ocg = [];
+      doc.internal.events.subscribe('putResources', () => {
+        layerEls.forEach(g => { ocg.push(doc.internal.newObject()); doc.internal.write(`<< /Type /OCG /Name (${g.id}) >>`); doc.internal.write('endobj'); });
+      });
+      doc.internal.events.subscribe('putXobjectDict', () => {
+        doc.internal.write('>>'); doc.internal.write('/Properties <<');
+        ocg.forEach((id, i) => doc.internal.write(`/OC${i} ${id} 0 R`));
+      });
+      doc.internal.events.subscribe('putCatalog', () => {
+        const refs = ocg.map(id => `${id} 0 R`).join(' ');
+        doc.internal.write('/Version /1.5');
+        doc.internal.write(`/OCProperties << /OCGs [${refs}] /D << /Name (Layers) /Order [${refs}] /ON [${refs}] >> >>`);
+      });
+      for (let i = 0; i < layerEls.length; i++) {
+        const sub = el.cloneNode(false); sub.appendChild(layerEls[i].cloneNode(true)); host.appendChild(sub);
+        doc.internal.write(`/OC /OC${i} BDC`);
+        await doc.svg(sub, { x: 0, y: 0, width: sh.TW, height: sh.TH });
+        doc.internal.write('EMC');
+      }
       host.remove();
       await saveFile(baseName() + '.pdf', doc.output('blob'));
     } catch (err) { say('PDF не собрался: ' + err.message + '. Скачайте SVG — он откроется в Illustrator.', true); }
