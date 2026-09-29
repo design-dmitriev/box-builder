@@ -568,11 +568,10 @@
     ];
     return { q, TW, TH, pieces: { tuck: pc }, heads, notes, ly: bottom + 14 };
   }
-  // ================= wedge box (клин: призма-трапеция, крышки сверху и снизу) =================
-  // Задняя стенка вертикальная (H), лицевая наклонная, боковины — прямоугольные
-  // трапеции. Сверху крышка с язычком (на задней стенке), снизу — на лицевой;
-  // на боковинах скруглённые «ушки». Развёртка — честная развёртка такого тела:
-  // лицевая панель и вторая боковина лежат под углом.
+  // ================= wedge box (клин: призма-трапеция, крышка с язычком на всю заднюю стенку) =================
+  // Задняя стенка вертикальная (H), лицевая наклонная, боковины — прямоугольные трапеции.
+  // Сборка по видео: крышка сверху идёт по верху и всей задней стенке, язычок — в прорезь внизу.
+  const SLOT_H = 5.5;
   const vAdd = (a, b) => [a[0] + b[0], a[1] + b[1]], vSub = (a, b) => [a[0] - b[0], a[1] - b[1]], vMul = (a, k) => [a[0] * k, a[1] * k];
   const vLen = a => Math.hypot(a[0], a[1]);
   const areaSigned = pts => pts.reduce((s, q, i) => { const r = pts[(i + 1) % pts.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0) / 2;
@@ -599,107 +598,100 @@
     // Верхняя площадка не глубже нижней (иначе лицевая наклонена в другую сторону).
     const Tt = Math.min(Math.max(want, 6), B), tpCut = want > B + 0.01;
     const S = Math.hypot(H, B - Tt), phi = Math.atan2(B - Tt, H);
-    const tkT = Math.min(16, Math.max(8, Tt * 0.6)), tkB = Math.min(16, Math.max(10, B * 0.2));
-    const dhT = Math.max(4, Math.min(Tt * 0.85, W / 2 - 0.5)), dhB = Math.max(4, Math.min(B * 0.7, W / 2 - 0.5));
-    return { ...p, W, H, B, Tt, S, phi, tpCut, tkT, tkB, dhT, dhB };
+    const tk = Math.min(16, Math.max(9, B * 0.2));            // язычок на конце крышки
+    const Lb = Math.max(6, H - SLOT_H);                       // крышка на задней стенке кончается на SLOT_H выше нижнего сгиба
+    const eY = Math.max(5, Math.min(22, W * 0.22));           // ушки внутренней задней стенки
+    const dhB = Math.max(4, Math.min(B * 0.45, 24));          // ушки боковин снизу
+    return { ...p, W, H, B, Tt, S, phi, tpCut, tk, Lb, eY, dhB };
   }
+  // Развёртка одной полосой: крышка (язычок → задняя → верх) — лицевая — дно — внутренняя задняя;
+  // боковины-трапеции сидят на лицевой, на них снизу ушки; на внутренней задней тоже ушки.
   // Все детали в «плоской» системе координат (y вверх), потом переводятся в SVG.
   function wedgeGeo(q) {
-    const { W, H, B, Tt, S, tkT, tkB, dhT, dhB } = q;
-    const eh = [(Tt - B) / S, H / S];            // вдоль лицевой снизу вверх
-    const n = [H / S, (B - Tt) / S];             // вдоль лицевой слева направо
-    const A = [W, 0], Dn = [W, H], Bp = [W + B, 0], C = [W + Tt, H];
-    const Bp2 = vAdd(Bp, vMul(n, W)), C2 = vAdd(C, vMul(n, W));
-    const al = B * (B - Tt) / S, be = B * H / S, al2 = Tt * (B - Tt) / S, be2 = Tt * H / S;
-    const A2 = vAdd(vAdd(Bp2, vMul(eh, al)), vMul(n, be));
-    const D2 = vAdd(vAdd(C2, vMul(eh, al2)), vMul(n, be2));
-    const back = [[0, 0], [W, 0], [W, H], [0, H]];
-    const side1 = [A, Bp, C, Dn];
-    const front = [Bp, Bp2, C2, C];
-    const side2 = [A2, Bp2, C2, D2];
-    const cen = poly => poly.reduce((s, r) => vAdd(s, r), [0, 0]).map(v => v / poly.length);
-    const outward = (p0, p1, inside) => {
-      const u = vMul(vSub(p1, p0), 1 / vLen(vSub(p1, p0))); let nn = [-u[1], u[0]];
-      const mid = vMul(vAdd(p0, p1), 0.5);
-      if ((inside[0] - mid[0]) * nn[0] + (inside[1] - mid[1]) * nn[1] > 0) nn = vMul(nn, -1);
-      return nn;
+    const { W, H, B, Tt, S, phi, tk, Lb, eY, dhB } = q;
+    const c = Math.cos(phi), s = Math.sin(phi), PI2 = Math.PI / 2;
+    const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+    const place = (p0, p1, out, pts) => { const w = vLen(vSub(p1, p0)), u = vMul(vSub(p1, p0), 1 / w); return pts.map(([a, b]) => vAdd(vAdd(p0, vMul(u, a)), vMul(out, b))); };
+    const yL = S + Tt, yT = yL + Lb;
+    const parts = {
+      bottom: rect(0, -B, W, 0), front: rect(0, 0, W, S), lidTop: rect(0, S, W, yL), lidBack: rect(0, yL, W, yT),
+      tab: place([0, yT], [W, yT], [0, 1], tongueST(W, tk)),
+      backIn: rect(0, -B - H, W, -B),
+      sideR: [[W, 0], [W, S], [W + Tt * c, S + Tt * s], [W + B * c, B * s]],
+      sideL: [[0, 0], [-B * c, B * s], [-Tt * c, S + Tt * s], [0, S]],
+      earSR: place([W, 0], [W + B * c, B * s], [s, -c], earST(B, dhB)),
+      earSL: place([0, 0], [-B * c, B * s], [-s, -c], earST(B, dhB)),
+      earYR: place([W, -B - H], [W, -B], [1, 0], earST(H, eY)),
+      earYL: place([0, -B], [0, -B - H], [-1, 0], earST(H, eY)),
     };
-    const place = (p0, p1, out, pts) => { const w = vLen(vSub(p1, p0)), u = vMul(vSub(p1, p0), 1 / w); return pts.map(([s, t]) => vAdd(vAdd(p0, vMul(u, s)), vMul(out, t))); };
-    const c2 = cen(side2);
-    const glueOut = outward(A2, D2, c2), dd = vMul(vSub(D2, A2), 1 / H);
-    const glue = [D2, vAdd(vAdd(D2, vMul(glueOut, GLUE)), vMul(dd, -10)), vAdd(vAdd(A2, vMul(glueOut, GLUE)), vMul(dd, 10)), A2];
-    const lidT = [[0, H], [W, H], [W, H + Tt], [0, H + Tt]];
-    const tongT = place([0, H + Tt], [W, H + Tt], [0, 1], tongueST(W, tkT));
-    const dT1 = place(Dn, C, [0, 1], earST(Tt, dhT));
-    const dT2 = place(C2, D2, outward(C2, D2, c2), earST(Tt, dhT));
-    const q0 = vAdd(Bp, vMul(eh, -B)), q1 = vAdd(Bp2, vMul(eh, -B));
-    const lidB = [Bp, Bp2, q1, q0];
-    const tongB = place(q0, q1, vMul(eh, -1), tongueST(W, tkB));
-    const dB1 = place(A, Bp, [0, -1], earST(B, dhB));
-    const dB2 = place(Bp2, A2, outward(Bp2, A2, c2), earST(B, dhB));
-    const parts = { back, side1, front, side2, glue, lidT, tongT, dT1, dT2, lidB, tongB, dB1, dB2 };
+    const slot = rect(0.6, -B - SLOT_H - 1, W - 0.6, -B - SLOT_H + 1);
+    // Дерево сгибов: родитель, линия сгиба и угол в собранной коробке (от плоского листа).
+    const nodes = [
+      { k: 'bottom' },
+      { k: 'front', par: 'bottom', h: [[0, 0], [W, 0]], ang: PI2 + phi, tex: 'front' },
+      { k: 'lidTop', par: 'front', h: [[0, S], [W, S]], ang: PI2 - phi, tex: 'lidTop' },
+      { k: 'lidBack', par: 'lidTop', h: [[0, yL], [W, yL]], ang: PI2, tex: 'lidBack' },
+      { k: 'tab', par: 'lidBack', h: [[0, yT], [W, yT]], ang: PI2, tex: 'tab', avg: true },
+      { k: 'sideR', par: 'front', h: [[W, 0], [W, S]], ang: PI2, tex: 's2' },
+      { k: 'sideL', par: 'front', h: [[0, 0], [0, S]], ang: PI2, tex: 's1' },
+      { k: 'earSR', par: 'sideR', h: [[W, 0], [W + B * c, B * s]], ang: PI2, tex: 'eS2', avg: true },
+      { k: 'earSL', par: 'sideL', h: [[0, 0], [-B * c, B * s]], ang: PI2, tex: 'eS1', avg: true },
+      { k: 'backIn', par: 'bottom', h: [[0, -B], [W, -B]], ang: PI2, hole: slot },
+      { k: 'earYR', par: 'backIn', h: [[W, -B - H], [W, -B]], ang: PI2, tex: 'eY2', avg: true },
+      { k: 'earYL', par: 'backIn', h: [[0, -B], [0, -B - H]], ang: PI2, tex: 'eY1', avg: true },
+    ].map(n => ({ ...n, poly: parts[n.k] }));
     const creases = [
-      [W, 0, W, H], [...Bp, ...C], [...Bp2, ...C2], [...A2, ...D2],
-      [0, H, W, H], [...Dn, ...C], [...C2, ...D2],
-      [1, H + Tt, W - 1, H + Tt],
-      [...Bp, ...Bp2], [...A, ...Bp], [...A2, ...Bp2],
-      [...vAdd(q0, vMul(n, 1)), ...vAdd(q1, vMul(n, -1))],
+      [0, 0, W, 0], [0, -B, W, -B], [0, S, W, S], [0, yL, W, yL], [1, yT, W - 1, yT],
+      [W, 0, W, S], [0, 0, 0, S],
+      [W, 0, W + B * c, B * s], [0, 0, -B * c, B * s], [W, -B - H, W, -B], [0, -B - H, 0, -B],
     ];
-    const a2 = vMul(vSub(A2, Bp2), 1 / B), b2 = vMul(vSub(D2, A2), 1 / H);
-    // Глобальные «геометрические» описания панелей: o — угол, u — вправо, v — вниз (на печатной стороне).
+    // Геометрия печати: o — верхний левый угол, u — вправо, v — вниз (для взгляда на печатную сторону снаружи).
     const rects = {
-      back: { o: [0, H], u: [1, 0], v: [0, -1], w: W, h: H },
-      s1: { o: Dn, u: [1, 0], v: [0, -1], w: B, h: H },
-      front: { o: C, u: n, v: vMul(eh, -1), w: W, h: S },
-      s2: { o: vAdd(Bp2, vMul(b2, H)), u: a2, v: vMul(b2, -1), w: B, h: H },
-      lidTop: { o: [0, H + Tt], u: [1, 0], v: [0, -1], w: W, h: Tt },
-      tuckTop: { o: [1, H + Tt + tkT], u: [1, 0], v: [0, -1], w: W - 2, h: tkT },
-      lidBot: { o: Bp, u: n, v: vMul(eh, -1), w: W, h: B },
-      tuckBot: { o: vAdd(q0, vMul(n, 1)), u: n, v: vMul(eh, -1), w: W - 2, h: tkB },
+      front: { o: [0, S], u: [1, 0], v: [0, -1], w: W, h: S },
+      bottom: { o: [0, 0], u: [1, 0], v: [0, -1], w: W, h: B },
+      lidTop: { o: [0, yL], u: [1, 0], v: [0, -1], w: W, h: Tt },
+      lidBack: { o: [W, yL], u: [-1, 0], v: [0, 1], w: W, h: Lb },
+      s2: { o: [W - H * s, H * c], u: [c, s], v: [s, -c], w: B, h: H },
+      s1: { o: [-B * c + H * s, B * s + H * c], u: [c, -s], v: [-s, -c], w: B, h: H },
     };
-    return { parts, creases, rects, pts: { A, Dn, Bp, C, Bp2, C2, A2, D2 }, n, eh, glueOut, q0, q1, a2, b2, c2 };
+    const all = Object.values(parts).flat();
+    const ext = { minx: Math.min(...all.map(r => r[0])), maxx: Math.max(...all.map(r => r[0])), miny: Math.min(...all.map(r => r[1])), maxy: Math.max(...all.map(r => r[1])) };
+    return { parts, nodes, slot, creases, rects, ext, c, s, yL, yT };
   }
   function wedgeBox(q, x0, y0) {
-    const g = wedgeGeo(q), { W, H, B, Tt, S, tkT, tkB } = q;
-    const all = Object.values(g.parts).flat();
-    const minx = Math.min(...all.map(r => r[0])), maxx = Math.max(...all.map(r => r[0]));
-    const miny = Math.min(...all.map(r => r[1])), maxy = Math.max(...all.map(r => r[1]));
+    const g = wedgeGeo(q), { W, H, B, Tt, S, Lb } = q, { c, s, yT } = g, { minx, maxx, miny, maxy } = g.ext;
     const cv = ([x, y]) => [x0 + x - minx, y0 + maxy - y];
     const vv = ([x, y]) => [x, -y];                    // вектор: y вверх -> y вниз
     const poly = pts => P(ccw(pts.map(cv)));
     const parts = Object.values(g.parts).map(poly);
     const outline = unionLoose(parts), bleed = offset(outline, BLEED);
-    const { A2, D2 } = g.pts;
-    const ex = vMul(vSub(D2, A2), 1 / H);
-    const excl = [vSub(A2, vMul(ex, BLEED)), vAdd(D2, vMul(ex, BLEED)), vAdd(vAdd(D2, vMul(ex, BLEED)), vMul(g.glueOut, GLUE + BLEED + 2)), vAdd(vSub(A2, vMul(ex, BLEED)), vMul(g.glueOut, GLUE + BLEED + 2))];
-    const printFill = diff(bleed, [poly(excl)]);
-    const panels = ['back', 'side1', 'front', 'side2', 'lidT', 'lidB'].map(k => offset([poly(g.parts[k])], -SAFE));
-    const creases = g.creases.map(([a, b, c, e]) => { const [x1, y1] = cv([a, b]), [x2, y2] = cv([c, e]); return [x1, y1, x2, y2]; });
+    const holes = [poly(g.slot)];
+    const printFill = diff(bleed, holes);
+    const panels = ['front', 'bottom', 'lidTop', 'lidBack', 'sideR', 'sideL', 'backIn'].map(k => offset([poly(g.parts[k])], -SAFE));
+    const creases = g.creases.map(([a, b, c2, e]) => { const [x1, y1] = cv([a, b]), [x2, y2] = cv([c2, e]); return [x1, y1, x2, y2]; });
     const rects = {};
     for (const [k, r] of Object.entries(g.rects)) rects[k] = { o: cv(r.o), u: vv(r.u), v: vv(r.v), w: r.w, h: r.h };
-    for (const k of ['dT1', 'dT2', 'dB1', 'dB2']) {
-      const pp = g.parts[k].map(cv), xs = pp.map(z => z[0]), ys = pp.map(z => z[1]);
+    for (const [k, pk] of [['tab', 'tab'], ['eS1', 'earSL'], ['eS2', 'earSR'], ['eY1', 'earYL'], ['eY2', 'earYR']]) {
+      const pp = g.parts[pk].map(cv), xs = pp.map(z => z[0]), ys = pp.map(z => z[1]);
       rects[k] = [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
     }
     const rot = u => Math.atan2(-u[1], u[0]) * 180 / Math.PI;
     // Подпись по центру панели; dy — сдвиг «вниз» относительно направления текста (мм).
-    const labels = [], L = (c, u, s, size, dy) => {
-      const p0 = cv(c), dv = vv([u[1], -u[0]]), k = (dy || 0) + 1.2;
-      labels.push({ x: p0[0] + dv[0] * k, y: p0[1] + dv[1] * k, s, size, rot: rot(u), fill: COL.label });
+    const labels = [], L = (cen, u, str, size, dy) => {
+      const p0 = cv(cen), dv = vv([u[1], -u[0]]), k = (dy || 0) + 1.2;
+      labels.push({ x: p0[0] + dv[0] * k, y: p0[1] + dv[1] * k, s: str, size, rot: rot(u), fill: COL.label });
     };
     const rc = r => vAdd(vAdd(r.o, vMul(r.u, r.w / 2)), vMul(r.v, r.h / 2));
     const gr = g.rects;
-    L(rc(gr.back), [1, 0], 'ЗАДНЯЯ', 6, -3.5); L(rc(gr.back), [1, 0], `${f1(W)} × ${f1(H)}`, 3.5, 3.5);
-    L(rc(gr.s1), [1, 0], 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s1), [1, 0], `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
-    L(rc(gr.front), g.n, 'ЛИЦЕВАЯ (наклон)', 6, -3.5); L(rc(gr.front), g.n, `${f1(W)} × ${f1(S)}`, 3.5, 3.5);
-    L(rc(gr.s2), g.a2, 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s2), g.a2, `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
-    const gc = vAdd(vMul(vAdd(A2, D2), 0.5), vMul(g.glueOut, GLUE / 2));
-    L(gc, g.b2, 'КЛЕЙ', 3.2, 0);
+    L(rc(gr.front), [1, 0], 'ЛИЦЕВАЯ (наклон)', 6, -3.5); L(rc(gr.front), [1, 0], `${f1(W)} × ${f1(S)}`, 3.5, 3.5);
+    L(rc(gr.bottom), [1, 0], 'ДНО', 5, -3.5); L(rc(gr.bottom), [1, 0], `${f1(W)} × ${f1(B)}`, 3.5, 3.5);
     L(rc(gr.lidTop), [1, 0], 'ВЕРХ (крышка)', Math.min(3.5, Tt / 5), 0);
-    L(rc(gr.tuckTop), [1, 0], 'язычок', 3, 0);
-    L(rc(gr.lidBot), g.n, 'ДНО (крышка)', Math.min(3.5, B / 8), 0);
-    L(rc(gr.tuckBot), g.n, 'язычок', 3, 0);
-    return { outline, bleed, printFill, holes: [], creases, options: [], panels, labels, rects, zones: [], w: maxx - minx, h: maxy - miny };
+    L(rc(gr.lidBack), [-1, 0], 'ЗАДНЯЯ', 6, -3.5); L(rc(gr.lidBack), [-1, 0], `${f1(W)} × ${f1(H)}`, 3.5, 3.5);
+    L(rc(gr.s2), [c, s], 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s2), [c, s], `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
+    L(rc(gr.s1), [c, -s], 'БОК', Math.min(5, B / 8), -3.5); L(rc(gr.s1), [c, -s], `${f1(B)}/${f1(Tt)} × ${f1(H)}`, 3, 3.5);
+    L([W / 2, yT + q.tk * 0.45], [1, 0], 'язычок', 3, 0);
+    L([W / 2, -B - H / 2], [1, 0], 'ВНУТРЕННЯЯ СТЕНКА', 4, -2); L([W / 2, -B - H / 2], [1, 0], 'печать не нужна', 3, 3);
+    return { outline, bleed, printFill, holes, creases, options: [], panels, labels, rects, zones: [], w: maxx - minx, h: maxy - miny };
   }
   function sheetWedge(p) {
     const q = deriveWedge(p);
@@ -709,12 +701,12 @@
     const TW = Math.max(x0 + pc.w + BLEED + M, 280);
     const deg = q.phi * 180 / Math.PI;
     const heads = [
-      [x0, M + 4, 'КОРОБКА-КЛИН (призма-трапеция) — крышки сверху и снизу с язычками', 5, true],
+      [x0, M + 4, 'КОРОБКА-КЛИН (призма-трапеция) — развёртка одной полосой', 5, true],
       [x0, M + 10, `Ширина ${f1(q.W)} · высота сзади ${f1(q.H)} · глубина снизу ${f1(q.B)} · сверху ${f1(q.Tt)} мм · наклон лицевой ${f1(deg)}°`, 3.3],
     ];
     const notes = [
-      `Стенки: задняя ${f1(q.W)} × ${f1(q.H)}, лицевая (наклонная) ${f1(q.W)} × ${f1(q.S)} мм, боковины — трапеции ${f1(q.B)} (низ) / ${f1(q.Tt)} (верх) × ${f1(q.H)} мм.`,
-      'Верхняя крышка на задней стенке, нижняя — на лицевой; язычки заходят внутрь, боковые «ушки» загибаются внутрь. Клеевой клапан 13 мм приклеивается изнутри.',
+      `Стенки: лицевая (наклонная) ${f1(q.W)} × ${f1(q.S)}, дно ${f1(q.W)} × ${f1(q.B)}, внутренняя задняя ${f1(q.W)} × ${f1(q.H)} мм; боковины — трапеции ${f1(q.B)} (низ) / ${f1(q.Tt)} (верх) × ${f1(q.H)} мм.`,
+      'Крышка одним куском закрывает верх и заднюю стенку снаружи (на ней печатается «ЗАДНЯЯ»); язычок продевается в прорезь у нижнего края внутренней стенки. Ушки боковин и внутренней стенки загибаются внутрь.',
       'Картон 0,3–0,4 мм; перед печатью сверить со штампом типографии.',
     ];
     const ly = bottom + 14;
@@ -908,65 +900,53 @@
 
   let tuckParts = null;
   function build(p, keepView) { return boxType === 'tuck' ? buildTuck(p, keepView) : boxType === 'tele' ? buildTele(p, keepView) : boxType === 'wedge' ? buildWedge(p, keepView) : buildSleeve(p, keepView); }
-  // ---------- 3D клина ----------
+  // ---------- 3D клина: дерево сгибов ----------
+  // Каждая деталь — своя группа с началом на линии сгиба; собранное состояние = развёртка,
+  // сложенная по сгибам (угол детали × коэффициент 0…1). Внутренняя сторона листа смотрит вверх.
   let wedgeParts = null;
   const shapeFrom = pts => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([a, b]) => s.lineTo(a, b)); return s; };
-  // Боковина-трапеция: сама призма по внутренним плоскостям + снаружи тонкий слой с текстурой макета.
-  function wedgeSide(q, sx, rectName, parent) {
-    const { W, H, B, Tt } = q, zb = -B / 2, zF = B / 2, zt = zb + Tt;
-    const nz = q.H / q.S, ny = (q.B - q.Tt) / q.S;
-    const full = [[zb, 0], [zF, 0], [zt, H], [zb, H]];
-    const core = [[zb + T, 0], [zF - T / nz, 0], [zF - (T + H * ny) / nz, H], [zb + T, H]];
-    const uu = z => sx < 0 ? -z : z;
-    const place = g => { g.applyMatrix4(new THREE.Matrix4().makeRotationY(sx < 0 ? Math.PI / 2 : -Math.PI / 2)); g.translate(sx * W / 2, 0, 0); return g; };
-    const geo = place(new THREE.ExtrudeGeometry(shapeFrom(core.map(([z, y]) => [uu(z), y])), { depth: T, bevelEnabled: false }));
-    const mesh = new THREE.Mesh(geo, [innerM, blackM]); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh);
-    const pg = place(new THREE.ShapeGeometry(shapeFrom(full.map(([z, y]) => [uu(z), y]))));
-    pg.translate(sx * 0.02, 0, 0);
-    const pos = pg.attributes.position, uv = new Float32Array(pos.count * 2);
-    for (let i = 0; i < pos.count; i++) { const z = pos.getZ(i), y = pos.getY(i); uv[2 * i] = sx < 0 ? (z - zb) / B : (zF - z) / B; uv[2 * i + 1] = y / H; }
-    pg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    const mat = faceMat('wedge', rectName); mat.side = THREE.DoubleSide;
-    const pm = new THREE.Mesh(pg, mat); pm.castShadow = pm.receiveShadow = true; parent.add(pm);
-  }
   function buildWedge(p, keepView) {
     const q = deriveWedge(p);
     resetRoot();
-    const { W, H, B, Tt, S, phi, tkT, tkB, dhT, dhB } = q;
-    const zb = -B / 2, zF = B / 2, zt = zb + Tt;
-    const bodyG = new THREE.Group(); bodyG.position.y = T; root.add(bodyG);
-    slab(W, H, T, F({ 5: faceMat('wedge', 'back'), 4: innerM }), [0, H / 2, zb + T / 2], bodyG);
-    const frontG = new THREE.Group(); frontG.position.set(0, H / 2, (zF + zt) / 2); frontG.rotation.x = -phi; bodyG.add(frontG);
-    slab(W, S, T, F({ 4: faceMat('wedge', 'front'), 5: innerM }), [0, 0, -T / 2], frontG);
-    wedgeSide(q, -1, 's1', bodyG); wedgeSide(q, 1, 's2', bodyG);
-    // верхняя крышка — на задней стенке
-    const topG = new THREE.Group(); topG.position.set(0, H, zb); bodyG.add(topG);
-    slab(W, T, Tt, F({ 2: faceMat('wedge', 'lidTop', ''), 3: innerM }), [0, T / 2, Tt / 2], topG);
-    slab(W - 2, tkT, T, F({ 4: faceMat('wedge', 'tuckTop', 'hv'), 5: innerM }), [0, -tkT / 2, Tt - T * 1.5], topG);
-    // нижняя крышка — на лицевой (петля по нижнему краю)
-    const botG = new THREE.Group(); botG.position.set(0, 0, zF); bodyG.add(botG);
-    slab(W, T, B, F({ 3: faceMat('wedge', 'lidBot', ''), 2: innerM }), [0, -T / 2, -B / 2], botG);
-    slab(W - 2, tkB, T, F({ 5: faceMat('wedge', 'tuckBot', 'hv'), 4: innerM }), [0, tkB / 2, -B + T * 1.5], botG);
-    // «ушки» — скруглённые боковые клапаны сверху и снизу
-    const topFlaps = [], botFlaps = [];
-    const mkFlap = (sx, top) => {
-      const w = (top ? Tt : B) - 1.4, h = top ? dhT : dhB;
-      const g = new THREE.Group(); g.position.set(sx * (W / 2 - T), top ? H - T : T, 0); bodyG.add(g);
-      const et = new THREE.Vector3(-sx, 0, 0), ed = new THREE.Vector3(0, top ? 1 : -1, 0), es = new THREE.Vector3().crossVectors(et, ed);
-      const org = new THREE.Vector3(0, 0, top ? (zb + zt) / 2 : 0).addScaledVector(es, -w / 2);
-      const shape = shapeFrom(earST(w, h));
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false });
-      geo.applyMatrix4(new THREE.Matrix4().makeBasis(es, et, ed).setPosition(org));
-      const mesh = new THREE.Mesh(geo, [innerM, blackM]); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh);
-      const pg = new THREE.ShapeGeometry(shape);
-      pg.applyMatrix4(new THREE.Matrix4().makeBasis(es, et, ed).setPosition(org.clone().addScaledVector(ed, T + 0.02)));
-      g.add(new THREE.Mesh(pg, faceMat('wedge', (top ? 'dT' : 'dB') + (sx < 0 ? '1' : '2'), '', true)));
-      (top ? topFlaps : botFlaps).push({ sx, g });
-    };
-    [-1, 1].forEach(sx => { mkFlap(sx, true); mkFlap(sx, false); });
+    const g = wedgeGeo(q), { W, H, B } = q;
+    const rootG = new THREE.Group(); rootG.position.set(-W / 2, 0.05, B / 2); root.add(rootG);
+    const innerD = innerM.clone(), blackD = blackM.clone(); innerD.side = blackD.side = THREE.DoubleSide;
+    const nodes = {};
+    g.nodes.forEach(nd => {
+      const H0 = nd.h ? nd.h[0] : [0, 0], par = nd.par ? nodes[nd.par] : null, P0 = par ? par.H0 : [0, 0];
+      const grp = new THREE.Group(); grp.position.set(H0[0] - P0[0], 0, H0[1] - P0[1]); (par ? par.g : rootG).add(grp);
+      const loc = ([x, y]) => [x - H0[0], y - H0[1]];
+      const sh = shapeFrom(nd.poly.map(pt => { const [a, b] = loc(pt); return [a, -b]; }));
+      if (nd.hole) sh.holes.push(new THREE.Path(nd.hole.map(pt => { const [a, b] = loc(pt); return new THREE.Vector2(a, -b); })));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false }); geo.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geo, [innerD, blackD]); mesh.castShadow = mesh.receiveShadow = true; grp.add(mesh);
+      if (nd.tex) {
+        const pg = new THREE.ShapeGeometry(shapeFrom(nd.poly.map(loc))); pg.rotateX(Math.PI / 2); pg.translate(0, -0.02, 0);
+        const r = g.rects[nd.tex];
+        if (r) {
+          const pos = pg.attributes.position, uv = new Float32Array(pos.count * 2);
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i) + H0[0] - r.o[0], y = pos.getZ(i) + H0[1] - r.o[1];
+            uv[2 * i] = (x * r.u[0] + y * r.u[1]) / r.w; uv[2 * i + 1] = 1 - (x * r.v[0] + y * r.v[1]) / r.h;
+          }
+          pg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        }
+        const mat = faceMat('wedge', nd.tex, '', !!nd.avg); mat.side = THREE.DoubleSide;
+        const pm = new THREE.Mesh(pg, mat); pm.castShadow = pm.receiveShadow = true; grp.add(pm);
+      }
+      let axis = null, sign = 1;
+      if (nd.h) {
+        const dx = nd.h[1][0] - H0[0], dy = nd.h[1][1] - H0[1], l = Math.hypot(dx, dy), ax = dx / l, ay = dy / l;
+        const cx = nd.poly.reduce((a, r) => a + r[0], 0) / nd.poly.length - H0[0], cy = nd.poly.reduce((a, r) => a + r[1], 0) / nd.poly.length - H0[1];
+        const along = cx * ax + cy * ay, nx = cx - along * ax, ny = cy - along * ay;
+        sign = (ay * nx - ax * ny) > 0 ? 1 : -1;               // сгиб всегда внутрь (внутренняя сторона листа смотрит вверх)
+        axis = new THREE.Vector3(ax, 0, ay);
+      }
+      nodes[nd.k] = { g: grp, H0, axis, sign, ang: nd.ang || 0 };
+    });
     hangerMesh = null;
-    wedgeParts = { bodyG, topG, botG, topFlaps, botFlaps };
-    dims = { type: 'wedge', W, H, D: B, q };
+    wedgeParts = nodes;
+    dims = { type: 'wedge', W, H, D: B, q, ext: g.ext };
     repaint(); pose(t);
     if (!keepView) frame();
     updateTexts(q);
@@ -1163,9 +1143,10 @@
       controls.update(); return;
     }
     if (dims.type === 'wedge') {
-      const { W, H, D } = dims, s = ka * Math.max(W * 2.2, (H + D + 30) * 1.45, D * 3) / 330;
-      controls.target.set(0, (H + D * 0.4) * 0.5, 0);
-      camera.position.set(300 * s, controls.target.y + 130 * s, 420 * s);
+      const { W, H, D, ext } = dims, fl = ext.maxy - ext.miny, fw = ext.maxx - ext.minx;
+      const s = ka * Math.max(W * 2.2, (H + D + 30) * 1.45, D * 3, fl * 1.05, fw * 1.4) / 330;
+      controls.target.set(0, H * 0.3, ((ext.miny + ext.maxy) / 2 + D / 2) * 0.6);
+      camera.position.set(300 * s, controls.target.y + 200 * s, controls.target.z + 420 * s);
       controls.update(); return;
     }
     if (dims.type === 'tuck') {
@@ -1190,15 +1171,11 @@
   function pose(t) {
     if (!dims) return;
     if (dims.type === 'wedge') {
-      const { D } = dims, { bodyG, topG, botG, topFlaps, botFlaps } = wedgeParts;
-      // по порядку: верхняя крышка → ушки сверху → коробка приподнимается → нижняя крышка → ушки снизу
-      topG.rotation.x = -segS(t, 0.03, 0.3) * R(125);
-      const ft = segS(t, 0.22, 0.4), fb = segS(t, 0.76, 0.96);
-      topFlaps.forEach(({ sx, g }) => { g.rotation.z = sx * -ft * R(100); });
-      bodyG.position.y = T + segS(t, 0.42, 0.58) * (D * 0.55 + 10);
-      botG.rotation.x = -segS(t, 0.6, 0.86) * R(125);
-      botFlaps.forEach(({ sx, g }) => { g.rotation.z = sx * fb * R(100); });
-      setStep(t <= 0.02 ? 0 : t < 0.42 ? 1 : t < 0.6 ? 2 : 3);
+      // как на видео: вынимаем язычок → раскрываем крышку → ушки → боковины → раскладываем всё в полосу
+      const f = (x, y) => 1 - segS(t, x, y);
+      const F = { tab: f(0.02, 0.14), lidBack: f(0.1, 0.3), lidTop: f(0.26, 0.42), earSR: f(0.36, 0.5), earSL: f(0.36, 0.5), earYR: f(0.4, 0.54), earYL: f(0.4, 0.54), sideR: f(0.5, 0.72), sideL: f(0.5, 0.72), backIn: f(0.6, 0.82), front: f(0.72, 0.96) };
+      for (const k in wedgeParts) { const n = wedgeParts[k]; if (n.axis) n.g.quaternion.setFromAxisAngle(n.axis, n.sign * n.ang * (k in F ? F[k] : 1)); }
+      setStep(t <= 0.02 ? 0 : t < 0.44 ? 1 : t < 0.75 ? 2 : 3);
       return;
     }
     if (dims.type === 'tele') {
@@ -1349,7 +1326,7 @@
     params = { ...DEF }; ids.forEach(k => { inp[k].value = shown(k, DEF[k]); inp[k].classList.remove('bad'); }); store(params); build(params, false);
   });
   document.getElementById('hanger').addEventListener('change', e => { if (hangerMesh) hangerMesh.visible = e.target.checked; repaint(); if (boxType === 'tuck') updateTexts(deriveTuck(params)); });
-  const STEPS = { sleeve: ['В коробке', 'Вытягиваем за вырезы', 'Коробка извлечена', 'Крышка снята'], tuck: ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'], tele: ['Закрыта', 'Поднимаем крышку', 'Снимаем', 'Открыта'], wedge: ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'] };
+  const STEPS = { sleeve: ['В коробке', 'Вытягиваем за вырезы', 'Коробка извлечена', 'Крышка снята'], tuck: ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'], tele: ['Закрыта', 'Поднимаем крышку', 'Снимаем', 'Открыта'], wedge: ['Закрыта', 'Открываем крышку', 'Раскладываем', 'Развёртка'] };
   const LABELS = { sleeve: { W: 'Ширина, мм', L: 'Высота, мм', D: 'Толщина, мм' }, tuck: { W: 'Ширина, мм', L: 'Высота, мм', D: 'Глубина, мм' }, tele: { W: 'Ширина, мм', L: 'Длина, мм', D: 'Высота, мм' }, wedge: { W: 'Ширина, мм', L: 'Высота сзади, мм', D: 'Глубина внизу, мм' } };
   function applyTypeUI() {
     document.querySelectorAll('#types button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === boxType)));
