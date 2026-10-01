@@ -174,7 +174,12 @@
   }
   @media (max-width: 899px) { .export { position: static; } }
   .ex-btns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-  #ex-fig { grid-column: 1 / -1; }
+  #ex-fig { grid-column: 1 / -1; position: relative; }
+  #ex-fig .beta { position: absolute; top: -8px; right: 14px; padding: 2px 9px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 500; letter-spacing: .04em; pointer-events: none; }
+  #fig-ask { grid-column: 1 / -1; border: 1px solid var(--ink); border-radius: 14px; padding: 12px 14px; display: grid; gap: 10px; font-size: 14px; }
+  #fig-ask[hidden] { display: none; }
+  #fig-ask .yn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #fig-ask button { min-height: 44px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: #fff; font-weight: 500; }
   .export .chk { border-top: 0; min-height: 36px; font-size: 14px; }
   #status { margin: 0; color: var(--muted); font-size: 12.5px; min-height: 1.2em; }
   #status:empty { display: none; }
@@ -278,7 +283,11 @@
     <div class="ex-btns">
       <button id="ex-pdf" type="button">Скачать PDF</button>
       <button class="ghost" id="ex-svg" type="button">SVG</button>
-      <button class="ghost" id="ex-fig" type="button" title="SVG в точном размере для Figma: 1 px = 1 pt, слои сохранены">Для Figma</button>
+      <button class="ghost" id="ex-fig" type="button" title="SVG в точном размере для Figma: 1 px = 1 pt, слои сохранены">Для Figma<span class="beta">тест</span></button>
+      <div id="fig-ask" hidden role="alertdialog" aria-label="Подтверждение">
+        <span>Вы точно уверены, что этот макет по нужному размеру?</span>
+        <div class="yn"><button id="fig-yes" type="button">Да</button><button id="fig-no" class="ghost" type="button">Нет</button></div>
+      </div>
     </div>
     <label class="chk"><input type="checkbox" id="ex-design"><span>С текущим дизайном</span></label>
     <p id="status" role="status"></p>
@@ -1519,7 +1528,11 @@
     const sh = sheetAny(params);
     saveFile(baseName() + '.svg', buildSVG(sh, { design: designImages }));
   });
-  document.getElementById('ex-fig').addEventListener('click', () => {
+  const figAsk = document.getElementById('fig-ask');
+  document.getElementById('ex-fig').addEventListener('click', () => { figAsk.hidden = false; document.getElementById('fig-yes').focus(); });
+  document.getElementById('fig-no').addEventListener('click', () => { figAsk.hidden = true; say('Не скачано. Проверьте размеры и попробуйте снова.'); });
+  document.getElementById('fig-yes').addEventListener('click', () => {
+    figAsk.hidden = true;
     const sh = sheetAny(params);
     saveFile(baseName() + '_figma.svg', buildSVG(sh, { design: designImages, px: true }));
     say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma — слои сохранятся.`);
