@@ -101,7 +101,7 @@
 
   /* кнопки */
   button { font: inherit; cursor: pointer; }
-  #play, #ex-pdf, #ex-svg {
+  #play, #ex-pdf, #ex-svg, #ex-fig {
     min-height: 44px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--ink);
     background: var(--ink); color: #fff; font-weight: 500; transition: opacity .2s ease, background .2s ease, color .2s ease;
   }
@@ -174,6 +174,7 @@
   }
   @media (max-width: 899px) { .export { position: static; } }
   .ex-btns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  #ex-fig { grid-column: 1 / -1; }
   .export .chk { border-top: 0; min-height: 36px; font-size: 14px; }
   #status { margin: 0; color: var(--muted); font-size: 12.5px; min-height: 1.2em; }
   #status:empty { display: none; }
@@ -277,6 +278,7 @@
     <div class="ex-btns">
       <button id="ex-pdf" type="button">Скачать PDF</button>
       <button class="ghost" id="ex-svg" type="button">SVG</button>
+      <button class="ghost" id="ex-fig" type="button" title="SVG в точном размере для Figma: 1 px = 1 pt, слои сохранены">Для Figma</button>
     </div>
     <label class="chk"><input type="checkbox" id="ex-design"><span>С текущим дизайном</span></label>
     <p id="status" role="status"></p>
@@ -760,6 +762,7 @@
   // bleed, printFill, panels, creases, options, zones, labels) — слои соберутся
   // сами, здесь и в PDF ничего добавлять не нужно. Порядок — снизу вверх.
   // NOPRINT — служебные слои, в печать не идут.
+  const PX_PER_MM = 72 / 25.4;          // для Figma: 1 px = 1 pt, тогда PDF из Figma получается в натуральную величину
   const SVG_LAYERS = [
     'BACKGROUND',          // фон коробки: заливка области печати с вылетами
     'DESIGN_PREVIEW',      // загруженный макет (при экспорте «с текущим дизайном»)
@@ -775,7 +778,7 @@
   ];
   function buildSVG(sh, opts) {
     const font = opts.font || 'Arial, Helvetica, sans-serif';
-    const o = [`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${sh.TW.toFixed(2)}mm" height="${sh.TH.toFixed(2)}mm" viewBox="0 0 ${sh.TW.toFixed(2)} ${sh.TH.toFixed(2)}">`];
+    const o = [`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.px ? (sh.TW * PX_PER_MM).toFixed(2) : sh.TW.toFixed(2) + 'mm'}" height="${opts.px ? (sh.TH * PX_PER_MM).toFixed(2) : sh.TH.toFixed(2) + 'mm'}" viewBox="0 0 ${sh.TW.toFixed(2)} ${sh.TH.toFixed(2)}">`];
     const names = { sleeveA: 'OUTER_A_EUROHANGER', sleeveB: 'OUTER_B_PLAIN', lid: 'INNER_LID', base: 'INNER_BASE', tuck: 'TUCK_BOX', wedge: 'WEDGE_BOX' };
     const L = Object.fromEntries(SVG_LAYERS.map(k => [k, []]));
     for (const [k, pc] of Object.entries(sh.pieces)) {
@@ -1515,6 +1518,11 @@
   document.getElementById('ex-svg').addEventListener('click', () => {
     const sh = sheetAny(params);
     saveFile(baseName() + '.svg', buildSVG(sh, { design: designImages }));
+  });
+  document.getElementById('ex-fig').addEventListener('click', () => {
+    const sh = sheetAny(params);
+    saveFile(baseName() + '_figma.svg', buildSVG(sh, { design: designImages, px: true }));
+    say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma — слои сохранятся.`);
   });
   let pdfLibs = null;
   const loadPdfLibs = () => pdfLibs || (pdfLibs = loadScript('vendor/jspdf.umd.min.js')
