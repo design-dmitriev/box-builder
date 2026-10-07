@@ -1287,6 +1287,13 @@
       camera.position.set(300 * s, controls.target.y + 120 * s, 420 * s);
       controls.update(); return;
     }
+    if (dims.type === 'hang') {
+      // лоток при вытягивании поднимается на всю высоту футляра — кадр берём с запасом сверху
+      const { W, H } = dims, full = 2 * H + 2 * HANG_H + 14, s = Math.pow(ka, 1.25) * Math.max(W * 2.8, full * 0.92) / 330;
+      controls.target.set(W * (ka > 1 ? 0.9 : 0.6), full * 0.44, 0);
+      camera.position.set(controls.target.x + 400 * s, controls.target.y + 170 * s, 500 * s);
+      controls.update(); return;
+    }
     const { W, H } = dims, s = Math.pow(ka, 1.25) * Math.max(W * 2.6, H * 1.35) / 330;
     controls.target.set(W * (ka > 1 ? 1.1 : 0.75), H * 0.55, 0);
     camera.position.set(controls.target.x + 400 * s, controls.target.y + 200 * s, 500 * s);
@@ -1366,11 +1373,12 @@
     }
     if (dims.type === 'hang') {
       const { W, H, BH, DZ } = dims;
-      const up = seg(t, 0.05, 0.42), side = seg(t, 0.42, 0.68), tilt = seg(t, 0.74, 1);
+      // лоток сначала полностью выходит вверх, затем уходит вбок над футляром и только потом опускается — без пересечений
+      const up = seg(t, 0.05, 0.36), side = seg(t, 0.37, 0.56), down = seg(t, 0.57, 0.74), tilt = seg(t, 0.78, 1);
       const lift = H + HANG_H + 14;
-      innerG.position.set(side * (W + 50), BH / 2 + up * lift - side * lift + tilt * DZ * 0.4, 0.3 + side * 25 + tilt * 20);
+      innerG.position.set(side * (W + 50), BH / 2 + (up - down) * lift + tilt * DZ * 0.4, 0.3 + side * 25 + tilt * 20);
       innerG.rotation.set(-tilt * R(58), -side * 0.3, 0);
-      setStep(t <= 0.02 ? 0 : t < 0.42 ? 1 : t < 0.74 ? 2 : 3);
+      setStep(t <= 0.02 ? 0 : t < 0.37 ? 1 : t < 0.76 ? 2 : 3);
       return;
     }
     const { W, H, LW, LH, DZ } = dims;
