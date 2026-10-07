@@ -261,7 +261,7 @@
     <div class="checks">
       <label class="chk" id="f-hanger"><input type="checkbox" id="hanger" checked><span>Европодвес</span></label>
       <label class="chk"><input type="checkbox" id="blackboard"><span>Чёрный картон внутри</span></label>
-      <label class="chk" id="f-closedbot"><input type="checkbox" id="closedbot"><span>Дно-замок 1-2-3 (не открывается)</span></label>
+      <label class="chk" id="f-closedbot"><input type="checkbox" id="closedbot"><span>Дно с язычком-замком (в прорезь крышки)</span></label>
       <label class="chk" id="f-zones"><input type="checkbox" id="zones" checked><span>Зоны под стрелки</span></label>
     </div>
   </section>
@@ -474,15 +474,15 @@
     if (up) { const ye = y - th; return P([[x + inn, y], ...arc(x + inn + r, ye + r, r, 180, 270), ...arc(x + w - inn - r, ye + r, r, 270, 360), [x + w - inn, y]]); }
     const ye = y + th; return P([[x + w - inn, y], ...arc(x + w - inn - r, ye - r, r, 0, 90), ...arc(x + inn + r, ye - r, r, 90, 180), [x + inn, y]]);
   }
-  // Дно-замок 1-2-3: клапан с пазом (задняя), клапан с языком (лицевая),
-  // два клапана-крючка (бока). Складывается без клея, не открывается.
-  function lockDims(q) { const D = q.D; return { hS: D * 0.55, hT: D * 0.85, hB: D * 0.6, max: D * 0.85 }; }
-  function lockBottom(q, xB, xS1, xF, xS2, y) {
-    const { W, D } = q, k = lockDims(q), n = D * 0.25;
-    const slot = P([[xB, y], [xB + W, y], [xB + W, y + k.hS], [xB + W * 0.68, y + k.hS], [xB + W * 0.68, y + k.hS - n], [xB + W * 0.32, y + k.hS - n], [xB + W * 0.32, y + k.hS], [xB, y + k.hS]]);
-    const tongue = P([[xF, y], [xF + W, y], [xF + W, y + D * 0.08], [xF + W * 0.64, y + D * 0.6], [xF + W * 0.68, y + k.hT], [xF + W * 0.32, y + k.hT], [xF + W * 0.36, y + D * 0.6], [xF, y + D * 0.08]]);
-    const hook = x => P([[x, y], [x + D, y], [x + D, y + k.hB * 0.2], [x + D * 0.6, y + k.hB * 0.72], [x + D * 0.72, y + k.hB], [x + D * 0.28, y + k.hB], [x + D * 0.4, y + k.hB * 0.72], [x, y + k.hB * 0.2]]);
-    return [slot, tongue, hook(xS1), hook(xS2)];
+  // Дно с язычком-замком (по фото): низ — крышка + язычок, пылевых клапанов на этом торце нет. Язычок вырезан
+  // из самой лицевой стенки: в её кромке прямоугольный вырез, язычок сидит в нём на сгибе (nd выше кромки), вровень
+  // со стенкой; второй сгиб — на кромке стенки: дальше он идёт внутрь вдоль нижней крышки и своим концом
+  // входит в отверстие на сгибе крышка/язычок крышки. Без клея.
+  const TONGUE_GAP = 0.2;   // язычок нижней крышки чуть отодвинут от стенки, чтобы их грани не лежали в одной плоскости (иначе текстуры накладываются)
+  function tabDims(q) {
+    const { W, D } = q;
+    const tw = Math.min(16, Math.max(8, W * 0.14)), a = 2, b = 12, nd = Math.min(12, Math.max(6, D * 0.4));
+    return { tw, a, b, nd, th: a + b, sl: tw + 0.4, hl: 1.5, ht: 0.3 };   // вырез на сгибе большой крышки — узкая щель
   }
   const dustUp = (x, y, w, h) => P([[x, y], [x + 1.5, y - 4], [x + 4, y - h], [x + w - 3, y - h], [x + w - 0.5, y - 6], [x + w, y]]);
   function deriveTuck(p) {
@@ -502,22 +502,40 @@
   function tuckBox(q, x0, yT, hanger) {
     const { W, H, D, tuck, dh } = q;
     const xB = x0, xS1 = x0 + W, xF = xS1 + D, xS2 = xF + W, xG = xS2 + D, yB = yT + H;
+    const tk = q.closed ? tabDims(q) : null;
     const parts = [rect(xB, yT, xG, yB), P([[xG, yT], [xG + GLUE, yT + 10], [xG + GLUE, yB - 10], [xG, yB]]),
       rect(xF, yT - D, xF + W, yT), tuckPoly(xF, yT - D, W, tuck, true),
-      ...(q.closed ? lockBottom(q, xB, xS1, xF, xS2, yB) : [rect(xB, yB, xB + W, yB + D), tuckPoly(xB, yB + D, W, tuck, false)]),
-      dustUp(xS1, yT, D, dh), dustUp(xS2, yT, D, dh), ...(q.closed ? [] : [dustDown(xS1, yB, D, dh), dustDown(xS2, yB, D, dh)])];
+      rect(xB, yB, xB + W, yB + D), tuckPoly(xB, yB + D, W, tuck, false),
+      dustUp(xS1, yT, D, dh), dustUp(xS2, yT, D, dh), dustDown(xS1, yB, D, dh), dustDown(xS2, yB, D, dh)];
+    if (tk) {
+      const cx = xF + W / 2, h = tk.tw / 2;
+      parts.push(P([[cx - h, yB], [cx + h, yB], [cx + h - 0.7, yB + tk.th - 3], [cx + h - 2, yB + tk.th], [cx - h + 2, yB + tk.th], [cx - h + 0.7, yB + tk.th - 3]]));
+    }
     const creases = [[xF, yT, xF + W, yT], [xS1, yT, xS1 + D, yT], [xS2, yT, xS2 + D, yT],
-      [xB, yB, xB + W, yB], [xS1, yB, xS1 + D, yB], [xS2, yB, xS2 + D, yB], ...(q.closed ? [[xF, yB, xF + W, yB]] : []),
+      [xB, yB, xB + W, yB], [xS1, yB, xS1 + D, yB], [xS2, yB, xS2 + D, yB],
       ...[xS1, xF, xS2, xG].map(x => [x, yT, x, yB]),
-      [xF + 1, yT - D, xF + W - 1, yT - D], ...(q.closed ? [] : [[xB + 1, yB + D, xB + W - 1, yB + D]])];
+      [xF + 1, yT - D, xF + W - 1, yT - D], [xB + 1, yB + D, xB + W - 1, yB + D]];
     const options = [], holes = [], labels = [];
+    if (tk) {
+      const cx = xF + W / 2, h = tk.tw / 2;
+      // язычок из корпуса: надрезы по бокам (вырез в кромке стенки), сгиб в основании выреза, сгиб на кромке и сгиб у конца
+      holes.push(rect(cx - h - 0.2, yB - tk.nd, cx - h + 0.2, yB), rect(cx + h - 0.2, yB - tk.nd, cx + h + 0.2, yB));
+      creases.push([cx - h, yB - tk.nd, cx + h, yB - tk.nd], [cx - h, yB, cx + h, yB], [cx - h, yB + tk.a, cx + h, yB + tk.a]);
+      const sx = xB + W / 2, sh = tk.sl / 2;
+      holes.push(rect(sx - sh, yB + D - tk.hl, sx + sh, yB + D + tk.ht)); // вырез на сгибе крышка/язычок крышки под размер язычка
+    }
     const rects = { back: [xB, yT, W, H], s1: [xS1, yT, D, H], front: [xF, yT, W, H], s2: [xS2, yT, D, H],
       lidTop: [xF, yT - D, W, D], tuckTop: [xF, yT - D - tuck, W, tuck], lidBot: [xB, yB, W, D], tuckBot: [xB, yB + D, W, tuck],
       dust1T: [xS1, yT - dh, D, dh], dust2T: [xS2, yT - dh, D, dh], dust1B: [xS1, yB, D, dh], dust2B: [xS2, yB, D, dh] };
-    if (q.closed) {
-      const k = lockDims(q);
-      rects.lidBot = [xB, yB, W, k.hS]; rects.tuckBot = [xF, yB, W, k.hT];
-      rects.dust1B = [xS1, yB, D, k.hB]; rects.dust2B = [xS2, yB, D, k.hB];
+    if (tk) {   // части лицевой стенки вокруг выреза — для текстуры в 3D
+      const wl = (W - tk.tw) / 2 - 0.2;
+      rects.frontU = [xF, yT, W, H - tk.nd]; rects.frontL = [xF, yB - tk.nd, wl, tk.nd]; rects.frontR = [xF + W - wl, yB - tk.nd, wl, tk.nd];
+      rects.tab1 = [xF + (W - tk.tw) / 2, yB - tk.nd, tk.tw, tk.nd];
+      const sw = (W - tk.sl) / 2, tws = (W - 2 - tk.sl) / 2;   // части нижней крышки и её язычка вокруг выреза
+      rects.lidMain = [xB, yB, W, D - tk.hl];
+      rects.lidStrL = [xB + W / 2 + tk.sl / 2, yB + D - tk.hl, sw, tk.hl]; rects.lidStrR = [xB, yB + D - tk.hl, sw, tk.hl];
+      rects.tonMain = [xB, yB + D + tk.ht, W, tuck - tk.ht];
+      rects.tonStrL = [xB + W / 2 + tk.sl / 2, yB + D, tws, tk.ht]; rects.tonStrR = [xB + 1, yB + D, tws, tk.ht];
     }
     if (hanger) {
       const hw = q.hangW, hx = xB + (W - hw) / 2, r = 6;
@@ -530,21 +548,16 @@
     const outline = union(parts), bleed = offset(outline, BLEED);
     const printFill = diff(bleed, [rect(xG, yT - 400, xG + 60, yB + 400)]);
     const panels = [rect(xB, yT, xS1, yB), rect(xS1, yT, xF, yB), rect(xF, yT, xF + W, yB), rect(xS2, yT, xG, yB),
-      rect(xF, yT - D, xF + W, yT), ...(q.closed ? [] : [rect(xB, yB, xB + W, yB + D)])].map(pp => offset([pp], -SAFE));
+      rect(xF, yT - D, xF + W, yT), rect(xB, yB, xB + W, yB + D)].map(pp => offset([pp], -SAFE));
     const L = (x, y, s, size, rot, fill) => labels.push({ x, y, s, size, rot: rot || 0, fill: fill || COL.label });
     [[xB, 'ЗАДНЯЯ'], [xF, 'ЛИЦЕВАЯ']].forEach(([xp, t]) => { L(xp + W / 2, yT + H / 2, t, 6); L(xp + W / 2, yT + H / 2 + 7, `${f1(W)} × ${f1(H)}`, 3.5); });
     [xS1, xS2].forEach(x => L(x + D / 2 + 1.5, yT + H / 2, `БОК ${f1(D)} × ${f1(H)}`, Math.min(4, D / 4), -90));
     L(xG + GLUE / 2 + 1.5, yT + H / 2, 'КЛЕЙ', 3.5, -90);
     L(xF + W / 2, yT - D / 2 + 1.2, 'ВЕРХ (крышка)', Math.min(3.5, D / 5));
     L(xF + W / 2, yT - D - tuck / 2 + 1, 'язычок', 3);
-    if (q.closed) {
-      const k = lockDims(q), s = Math.min(3, D / 6);
-      L(xB + W / 2, yB + k.hS * 0.35, 'ДНО-ЗАМОК · паз', s);
-      L(xF + W / 2, yB + k.hT * 0.35, 'язык замка', s);
-    } else {
-      L(xB + W / 2, yB + D / 2 + 1.2, 'ДНО (крышка)', Math.min(3.5, D / 5));
-      L(xB + W / 2, yB + D + tuck / 2 + 1, 'язычок', 3);
-    }
+    L(xB + W / 2, yB + D / 2 + 1.2, 'ДНО (крышка)', Math.min(3.5, D / 5));
+    L(xB + W / 2, yB + D + tuck / 2 + 1, 'язычок', 3);
+    if (tk) { L(xF + W / 2, yB + tk.th / 2 + 0.5, 'язычок', 2.2); L(xB + W / 2, yB + D - tk.hl - 1.6, 'вырез на сгибе', 2.2); }
     if (hanger) { L(xB + W / 2, yT - 3.5, 'европодвес', 2.8); L(xB + W / 2, yT - HANG_H + 4.5, 'линия подгиба, клей', 2.5); }
     return { outline, bleed, printFill, holes, creases, options, panels, labels, rects, zones: [] };
   }
@@ -554,15 +567,15 @@
     const topExt = Math.max(q.D + q.tuck, hang ? 2 * HANG_H : 0, q.dh);
     const x0 = M + BLEED + 2, yT = M + 14 + BLEED + topExt + 2;
     const pc = tuckBox(q, x0, yT, hang);
-    const bottom = yT + q.H + (q.closed ? lockDims(q).max : Math.max(q.D + q.tuck, q.dh)) + BLEED;
+    const bottom = yT + q.H + Math.max(q.D + q.tuck, q.dh) + BLEED;
     const TW = Math.max(x0 + 2 * q.W + 2 * q.D + GLUE + BLEED + M, 280);
     const TH = bottom + 50.5;
     const heads = [
       [x0, M + 4, 'КОРОБКА С ЯЗЫЧКАМИ — обратный замок (RTE, ECMA A20.20)' + (hang ? ', с европодвесом' : ''), 5, true],
-      [x0, M + 10, `Панели ${f1(q.W)} × ${f1(q.D)} × ${f1(q.H)} мм (ширина × глубина × высота) · ${q.closed ? 'открывается только сверху, дно-замок 1-2-3' : 'открывается сверху и снизу'}`, 3.3],
+      [x0, M + 10, `Панели ${f1(q.W)} × ${f1(q.D)} × ${f1(q.H)} мм (ширина × глубина × высота) · ${q.closed ? 'низ с язычком-замком' : 'открывается сверху и снизу'}`, 3.3],
     ];
     const notes = [
-      q.closed ? 'Верхняя крышка с язычком открывается. Дно-замок 1-2-3: сложить боковые крючки, затем клапан с пазом, затем завести язык в паз — без клея, дно не открывается.' : 'Верхняя крышка крепится к лицевой стороне, нижняя — к задней (reverse tuck end). Язычки заходят внутрь коробки.',
+      q.closed ? 'Верх и низ открываются одинаково: крышка с язычком заходит внутрь. Низ: язычок на кромке лицевой стенки загнуть внутрь по сгибу и вставить его конец в прорезь нижней крышки. Без клея.' : 'Верхняя крышка крепится к лицевой стороне, нижняя — к задней (reverse tuck end). Язычки заходят внутрь коробки.',
       'Пылевые клапаны на боках. Клеевой клапан 13 мм приклеивается к задней стороне изнутри.',
       'Картон 0,3–0,4 мм; перед печатью сверить со штампом типографии.',
     ];
@@ -1003,45 +1016,32 @@
     mesh.visible = hangerOn();
     return mesh;
   }
-  // Дно-замок в 3D: четыре клапана той же формы, что в развёртке, каждый
-  // на своей петле у нижнего края стенки. Светлый контур — чтобы на чёрном
-  // было видно, как паз, язык и крючки сцепляются.
-  const lockFaceM = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.6, side: THREE.DoubleSide });
-  const lockLineM = new THREE.LineBasicMaterial({ color: 0x8a857d });
-  const lockEdgeM = new THREE.MeshStandardMaterial({ color: 0xcfc8bc, roughness: 0.95, side: THREE.DoubleSide });
-  function lockFlap(pts, basis, y, parent) {
-    const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([u, v]) => s.lineTo(u, v));
-    const g = new THREE.ExtrudeGeometry(s, { depth: T, bevelEnabled: false });
-    // (u, v, w) контура -> (x, y, z) коробки; толщина картона уходит вниз от слоя y
-    const m = new THREE.Matrix4().set(basis[0][0], basis[0][1], 0, 0, 0, 0, -1, y, basis[1][0], basis[1][1], 0, 0, 0, 0, 0, 1);
-    g.applyMatrix4(m); g.computeVertexNormals();
-    const mesh = new THREE.Mesh(g, [lockFaceM, lockEdgeM]); parent.add(mesh);
-    // приглушённый контур — как тень от линии реза, чтобы замок читался на чёрном
-    parent.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), lockLineM));
-  }
-  function buildLock3D(q, boxG) {
-    const { W, D } = q, k = lockDims(q), n = D * 0.25;
-    const slot = [[-W / 2, 0], [W / 2, 0], [W / 2, k.hS], [W * 0.18, k.hS], [W * 0.18, k.hS - n], [-W * 0.18, k.hS - n], [-W * 0.18, k.hS], [-W / 2, k.hS]];
-    const tongue = [[-W / 2, 0], [W / 2, 0], [W / 2, D * 0.08], [W * 0.14, D * 0.6], [W * 0.18, k.hT], [-W * 0.18, k.hT], [-W * 0.14, D * 0.6], [-W / 2, D * 0.08]];
-    const hook = [[-D / 2, 0], [D / 2, 0], [D / 2, k.hB * 0.2], [D * 0.1, k.hB * 0.72], [D * 0.22, k.hB], [-D * 0.22, k.hB], [-D * 0.1, k.hB * 0.72], [-D / 2, k.hB * 0.2]];
-    // порядок сборки = порядок слоёв: крючки внутри, затем клапан с пазом, снаружи язык
-    const back = new THREE.Group(); back.position.set(0, 0, -D / 2 + T); boxG.add(back);
-    lockFlap(slot, [[1, 0], [0, 1]], -T * 1.4, back);
-    const front = new THREE.Group(); front.position.set(0, 0, D / 2 - T); boxG.add(front);
-    lockFlap(tongue, [[1, 0], [0, -1]], -T * 2.8, front);
-    const hooks = [-1, 1].map(sx => {
-      const g = new THREE.Group(); g.position.set(sx * (W / 2 - T), 0, 0); boxG.add(g);
-      lockFlap(hook, [[0, -sx], [1, 0]], 0, g);
-      return { sx, g };
-    });
-    return { back, front, hooks };
+  // Язычок-замок в 3D: вырезан из лицевой стенки. Звено 1 сидит в вырезе вровень со стенкой (сгиб g — внутри стенки),
+  // сгиб g2 — на уровне кромки стенки, звено 2 лежит вдоль нижней крышки изнутри, сгиб g3 — конец заходит в
+  // отверстие на сгибе крышка/язычок крышки заподлицо. При вскрытии: конец вынимают, звено 2 выпрямляют, язычок отгибают наружу.
+  function buildTab3D(q, boxG, botG) {
+    const { D } = q, k = tabDims(q), th = T, zEnd = D / 2 - T / 2 - k.a;
+    const g = new THREE.Group(); g.position.set(0, k.nd, D / 2 - T / 2); boxG.add(g);
+    slab(k.tw, k.nd, th, F({ 4: faceMat('tuck', 'tab1'), 5: blackM }), [0, -k.nd / 2, 0], g);
+    const g2 = new THREE.Group(); g2.position.set(0, -k.nd + th / 2, 0); g.add(g2);
+    slab(k.tw, k.a, th, Array(6).fill(blackM), [0, -k.a / 2, 0], g2);
+    const g3 = new THREE.Group(); g3.position.set(0, -k.a, 0); g2.add(g3);
+    slab(k.tw, 2 * th, th, Array(6).fill(blackM), [0, -th / 2, 0], g3);   // конец: от верха звена до низа крышки (заподлицо)
+    g2.rotation.x = Math.PI / 2;   // закрыто: звено 2 лежит вдоль крышки изнутри
+    return { g, g2, g3 };
   }
   function buildTuck(p, keepView) {
     const q = deriveTuck(p);
     resetRoot();
     const { W, H, D, tuck, dh } = q;
     const boxG = new THREE.Group(); root.add(boxG);
-    slab(W, H, T, F({ 4: faceMat('tuck', 'front'), 5: innerM }), [0, H / 2, D / 2 - T / 2], boxG);
+    const kt = q.closed ? tabDims(q) : null;
+    if (kt) {   // лицевая стенка с вырезом в кромке под язычок
+      const wl = (W - kt.tw) / 2 - 0.2, fm = n => F({ 4: faceMat('tuck', n), 5: innerM });
+      slab(W, H - kt.nd, T, fm('frontU'), [0, kt.nd + (H - kt.nd) / 2, D / 2 - T / 2], boxG);
+      slab(wl, kt.nd, T, fm('frontL'), [-(W / 2 - wl / 2), kt.nd / 2, D / 2 - T / 2], boxG);
+      slab(wl, kt.nd, T, fm('frontR'), [W / 2 - wl / 2, kt.nd / 2, D / 2 - T / 2], boxG);
+    } else slab(W, H, T, F({ 4: faceMat('tuck', 'front'), 5: innerM }), [0, H / 2, D / 2 - T / 2], boxG);
     slab(W, H, T, F({ 5: faceMat('tuck', 'back'), 4: innerM }), [0, H / 2, -D / 2 + T / 2], boxG);
     slab(T, H, D - 2 * T, F({ 1: faceMat('tuck', 's1'), 0: innerM }), [-W / 2 + T / 2, H / 2, 0], boxG);
     slab(T, H, D - 2 * T, F({ 0: faceMat('tuck', 's2'), 1: innerM }), [W / 2 - T / 2, H / 2, 0], boxG);
@@ -1049,8 +1049,21 @@
     slab(W, T, D, F({ 2: faceMat('tuck', 'lidTop', 'v'), 3: innerM }), [0, T / 2, -D / 2], topG);
     slab(W - 2, tuck, T, F({ 5: faceMat('tuck', 'tuckTop', 'hv'), 4: innerM }), [0, -tuck / 2, -D + T * 1.5], topG);
     const botG = new THREE.Group(); botG.position.set(0, 0, -D / 2); boxG.add(botG);
-    slab(W, T, D, F({ 3: faceMat('tuck', 'lidBot', 'h'), 2: innerM }), [0, -T / 2, D / 2], botG);
-    slab(W - 2, tuck, T, F({ 4: faceMat('tuck', 'tuckBot', 'hv'), 5: innerM }), [0, tuck / 2, D - T * 1.5], botG);
+    // Основная часть дна и язычок целиком внутри коробки: внутренняя глубина = D − 2T, с зазором TONGUE_GAP с каждой стороны.
+    // Длина основной части Lb — от шарнира (наружная грань задней стенки) до свободной кромки (сгиб язычка), язычок стоит у самой кромки.
+    const Lb = D - 2 * T - 2 * TONGUE_GAP;
+    if (kt) {   // нижняя крышка и её язычок с вырезом на сгибе под язычок-замок
+      const hl = kt.hl, ht = kt.ht, sw = (W - kt.sl) / 2, tws = (W - 2 - kt.sl) / 2, lm = (n, f) => F({ 3: faceMat('tuck', n, 'h'), 2: innerM }), tm = n => F({ 4: faceMat('tuck', n, 'hv'), 5: innerM });
+      slab(W, T, Lb - hl, lm('lidMain'), [0, -T / 2, (Lb - hl) / 2], botG);
+      slab(sw, T, hl, lm('lidStrL'), [-(kt.sl / 2 + sw / 2), -T / 2, Lb - hl / 2], botG);
+      slab(sw, T, hl, lm('lidStrR'), [kt.sl / 2 + sw / 2, -T / 2, Lb - hl / 2], botG);
+      slab(W - 2, tuck - ht, T, tm('tonMain'), [0, ht + (tuck - ht) / 2, Lb - T / 2], botG);
+      slab(tws, ht, T, tm('tonStrL'), [-(kt.sl / 2 + tws / 2), ht / 2, Lb - T / 2], botG);
+      slab(tws, ht, T, tm('tonStrR'), [kt.sl / 2 + tws / 2, ht / 2, Lb - T / 2], botG);
+    } else {
+      slab(W, T, Lb, F({ 3: faceMat('tuck', 'lidBot', 'h'), 2: innerM }), [0, -T / 2, Lb / 2], botG);
+      slab(W - 2, tuck, T, F({ 4: faceMat('tuck', 'tuckBot', 'hv'), 5: innerM }), [0, tuck / 2, Lb - T / 2], botG);
+    }
     const flaps = [];
     [[-1, 'dust1T', 'dust1B'], [1, 'dust2T', 'dust2B']].forEach(([sx, rt, rb]) => {
       const ft = new THREE.Group(); ft.position.set(sx * (W / 2 - T), H - T, 0); boxG.add(ft);
@@ -1059,14 +1072,9 @@
       slab(dh, T, D - 4, F({ 3: faceMat('tuck', rb, '', true), 2: innerM }), [-sx * dh / 2, -T / 2, 0], fb);
       flaps.push({ sx, ft, fb });
     });
-    let lock = null;
-    if (q.closed) {
-      botG.visible = false;
-      flaps.forEach(({ fb }) => { fb.visible = false; });
-      lock = buildLock3D(q, boxG);
-    }
+    const tab = q.closed ? buildTab3D(q, boxG, botG) : null;
     hangerMesh = q.hangOK ? hangerMeshFor(q, H, D, 'tuck', boxG) : null;
-    tuckParts = { boxG, topG, botG, flaps, lock };
+    tuckParts = { boxG, topG, botG, flaps, tab };
     dims = { type: 'tuck', W, H, D, q };
     repaint(); pose(t);
     if (!keepView) frame();
@@ -1210,32 +1218,18 @@
     }
     if (dims.type === 'tuck') {
       const { H, D } = dims, { boxG, topG, botG, flaps } = tuckParts;
-      if (dims.q.closed) {
-        const { lock } = tuckParts;
-        topG.rotation.x = segS(t, 0.02, 0.24) * R(125);
-        const ftc = segS(t, 0.14, 0.3);
-        flaps.forEach(({ sx, ft: a }) => { a.rotation.z = sx * -ftc * R(100); });
-        botG.rotation.x = 0;
-        // дно выезжает в центр кадра и смотрит в камеру, корпус уходит назад
-        const e = segS(t, 0.3, 0.62);
-        boxG.rotation.order = 'YXZ';
-        boxG.rotation.set(-e * R(100), e * R(35), 0);
-        boxG.position.set(0, e * (H + D) * 0.55, 0);
-        if (lock) {
-          const o = i => segS(t, 0.64 + i * 0.1, 0.84 + i * 0.08) * R(80);
-          lock.front.rotation.x = -o(0);
-          lock.back.rotation.x = o(1);
-          lock.hooks.forEach(({ sx, g }) => { g.rotation.z = sx * o(2); });
-        }
-        setStep(t <= 0.02 ? 0 : t < 0.3 ? 1 : t < 0.64 ? 2 : 3);
-        return;
-      }
       boxG.rotation.x = 0; boxG.position.z = 0;
       topG.rotation.x = seg(t, 0.03, 0.28) * R(125);
       const ft = seg(t, 0.2, 0.38);
       const lift = seg(t, 0.42, 0.58);
       boxG.position.y = lift * (D + 14);
-      botG.rotation.x = seg(t, 0.6, 0.84) * R(125);
+      const cl = !!tuckParts.tab;
+      botG.rotation.x = seg(t, cl ? 0.68 : 0.6, cl ? 0.88 : 0.84) * R(125);
+      if (cl) {   // язычок: конец вынимают из отверстия, затем он целиком отгибается наружу из выреза
+        const { g, g3 } = tuckParts.tab;
+        g3.rotation.x = -R(90) + seg(t, 0.5, 0.56) * R(90);
+        g.rotation.x = -seg(t, 0.58, 0.7) * R(90);
+      }
       const fb = seg(t, 0.74, 0.95);
       flaps.forEach(({ sx, ft: a, fb: b }) => { a.rotation.z = sx * -ft * R(100); b.rotation.z = sx * fb * R(100); });
       setStep(t <= 0.02 ? 0 : t < 0.42 ? 1 : t < 0.6 ? 2 : 3);
@@ -1325,7 +1319,7 @@
       document.getElementById('h-size').textContent = `${fmt(q.W)} × ${fmt(q.D)} × ${fmt(q.H)}`;
       document.getElementById('h-info').textContent = `Коробка с язычками (RTE) · ширина ${fmt(q.W)} · глубина ${fmt(q.D)} · высота ${fmt(q.H)} мм`;
       const sh = sheetTuck(params);
-      document.getElementById('derived').textContent = `${q.closed ? 'Дно-замок 1-2-3 · ' : ''}Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм${sheetWarn(sh)}` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
+      document.getElementById('derived').textContent = `${q.closed ? 'Дно с язычком-замком · ' : ''}Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм${sheetWarn(sh)}` + (q.hangOK ? '' : ' · подвес не помещается при такой ширине');
       return;
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
@@ -1358,7 +1352,7 @@
     document.getElementById('f-th').hidden = boxType !== 'tele' && boxType !== 'sleeve';
     document.getElementById('f-to').hidden = boxType !== 'sleeve';
     document.querySelector('#f-th span').textContent = boxType === 'sleeve' ? 'Картон внутр., мм' : 'Картон, мм';
-    STEPS.tuck = closedBot() ? ['Закрыта', 'Крышка открыта', 'Дно-замок', 'Замок раскрыт'] : ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
+    STEPS.tuck = ['Закрыта', 'Верх открыт', 'Поднимаем', 'Низ открыт'];
     document.getElementById('f-hanger').hidden = boxType === 'tele' || boxType === 'wedge';
     document.getElementById('f-tp').hidden = boxType !== 'wedge';
     Object.entries(MINS[boxType]).forEach(([k, v]) => { inp[k].min = v; });
@@ -1511,7 +1505,7 @@
       return `<image x="${r[0].toFixed(3)}" y="${r[1].toFixed(3)}" width="${r[2].toFixed(3)}" height="${r[3].toFixed(3)}" preserveAspectRatio="none" href="${cc.toDataURL('image/jpeg', 0.9)}"/>`;
     }).join('');
   }
-  const baseName = () => `${({ tuck: closedBot() ? 'korobka-yazychok-dno-zamok' : 'korobka-yazychki', tele: 'kryshka-dno', wedge: 'korobka-klin', sleeve: 'futlyar' })[boxType]}_${f1(params.W)}x${f1(params.L)}x${f1(params.D)}`.replace(/\./g, ',');
+  const baseName = () => `${({ tuck: closedBot() ? 'korobka-yazychok-dno-yazychok-zamok' : 'korobka-yazychki', tele: 'kryshka-dno', wedge: 'korobka-klin', sleeve: 'futlyar' })[boxType]}_${f1(params.W)}x${f1(params.L)}x${f1(params.D)}`.replace(/\./g, ',');
   document.getElementById('ex-svg').addEventListener('click', () => {
     const sh = sheetAny(params);
     saveFile(baseName() + '.svg', buildSVG(sh, { design: designImages }));
