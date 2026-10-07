@@ -817,17 +817,27 @@
   function deriveHang(p) {
     const TRAY = [p.W, p.L, p.D], OUT = [p.W + 1.4, p.D + 1.8, p.L];
     const hw = Math.max(40, Math.min(isFinite(p.hw) ? p.hw : OUT[0], OUT[0]));
-    return { ...p, TRAY, OUT, hw, tw: Math.min(hw, p.W - 2), hangOK: OUT[0] >= 40, nw: 0, nh: 0, zh: 0 };
+    // верх футляра закрывает крышка с язычком; боковые клапаны — как у RTE: сразу полные, можно только уменьшить
+    const tuck = Math.min(16, Math.max(10, OUT[1] * 0.75));
+    const dhFull = Math.max(3, Math.min(OUT[0] / 2 - 0.5, OUT[2] * 0.5));
+    const dhFullUsed = !(isFinite(p.dh) && p.dh > 0);
+    const dh = dhFullUsed ? dhFull : Math.min(Math.max(p.dh, 3), dhFull);
+    const dhCut = !dhFullUsed && p.dh > dhFull + 0.01;
+    return { ...p, TRAY, OUT, hw, tw: Math.min(hw, p.W - 2), hangOK: OUT[0] >= 40, nw: 0, nh: 0, zh: 0, tuck, dh, dhFull, dhFullUsed, dhCut };
   }
   const tabPoly = (x, yTop, w, yBase) => { const r = Math.min(6, w / 4); return P([[x, yBase], ...arc(x + r, yTop + r, r, 180, 270), ...arc(x + w - r, yTop + r, r, 270, 360), [x + w, yBase]]); };
   function sleeveOpen(q, x0, yT, hanger) {
     const [W, D, H] = q.OUT;
     const xB = x0, xS1 = x0 + W, xF = xS1 + D, xS2 = xF + W, xG = xS2 + D, yB = yT + H;
-    const parts = [rect(xB, yT, xG, yB), P([[xG, yT], [xG + GLUE, yT + 10], [xG + GLUE, yB - 10], [xG, yB]])];
-    const creases = [xS1, xF, xS2, xG].map(x => [x, yT, x, yB]);
+    const tuck = q.tuck, dh = q.dh;
+    const parts = [rect(xB, yT, xG, yB), P([[xG, yT], [xG + GLUE, yT + 10], [xG + GLUE, yB - 10], [xG, yB]]),
+      rect(xF, yT - D, xF + W, yT), tuckPoly(xF, yT - D, W, tuck, true), dustUp(xS1, yT, D, dh), dustUp(xS2, yT, D, dh)];
+    const creases = [...[xS1, xF, xS2, xG].map(x => [x, yT, x, yB]),
+      [xF, yT, xF + W, yT], [xS1, yT, xS1 + D, yT], [xS2, yT, xS2 + D, yT], [xF + 1, yT - D, xF + W - 1, yT - D]];
     const options = [], holes = [], labels = [];
     const hw = q.hw, hx = xB + (W - hw) / 2;
-    const rects = { back: [xB, yT, W, H], s1: [xS1, yT, D, H], front: [xF, yT, W, H], s2: [xS2, yT, D, H] };
+    const rects = { back: [xB, yT, W, H], s1: [xS1, yT, D, H], front: [xF, yT, W, H], s2: [xS2, yT, D, H],
+      lidTop: [xF, yT - D, W, D], tuckTop: [xF, yT - D - tuck, W, tuck], dust1T: [xS1, yT - dh, D, dh], dust2T: [xS2, yT - dh, D, dh] };
     if (hanger) {
       parts.push(tabPoly(hx, yT - HANG_H, hw, yT));
       options.push([hx, yT, hx + hw, yT]);
@@ -836,12 +846,14 @@
     }
     const outline = union(parts), bleed = offset(outline, BLEED);
     const printFill = diff(bleed, [rect(xG, yT - 400, xG + 60, yB + 400)]);
-    const panels = [rect(xB, yT, xS1, yB), rect(xS1, yT, xF, yB), rect(xF, yT, xF + W, yB), rect(xS2, yT, xG, yB)].map(pp => offset([pp], -SAFE));
+    const panels = [rect(xB, yT, xS1, yB), rect(xS1, yT, xF, yB), rect(xF, yT, xF + W, yB), rect(xS2, yT, xG, yB), rect(xF, yT - D, xF + W, yT)].map(pp => offset([pp], -SAFE));
     const L = (x, y, s, size, rot, fill) => labels.push({ x, y, s, size, rot: rot || 0, fill: fill || COL.label });
     [[xB, 'ЗАДНЯЯ'], [xF, 'ЛИЦЕВАЯ']].forEach(([xp, t]) => { L(xp + W / 2, yT + H / 2, t, 6); L(xp + W / 2, yT + H / 2 + 7, `${f1(W)} × ${f1(H)}`, 3.5); });
     [xS1, xS2].forEach(x => L(x + D / 2 + 1.2, yT + H / 2, `БОК ${f1(D)} × ${f1(H)}`, Math.min(4, D / 4), -90));
     L(xG + GLUE / 2 + 1.5, yT + H / 2, 'КЛЕЙ', 3.5, -90);
-    L(xF + W / 2, yT + 6, 'ВЕРХ и НИЗ открыты', 3);
+    L(xF + W / 2, yT + 6, 'НИЗ открыт', 3);
+    L(xF + W / 2, yT - D / 2 + 1.2, 'ВЕРХ (крышка)', Math.min(3.5, D / 5));
+    L(xF + W / 2, yT - D - tuck / 2 + 1, 'язычок', 3);
     if (hanger) { L(xB + W / 2, yT - 3.5, 'клапан с европодвесом', 2.8); L(xB + W / 2, yT + 4.5, 'опция: биговка для складного подвеса', 2.5, 0, COL.opt); }
     return { outline, bleed, printFill, holes, creases, options, panels, labels, rects, zones: [] };
   }
@@ -856,7 +868,8 @@
   function sheetHang(p) {
     const q = deriveHang(p), [W, D, H] = q.OUT, [TW0, TL, TD] = q.TRAY;
     const hang = hangerOn() && q.hangOK;
-    const x0 = M + BLEED + 2, yT = M + 14 + BLEED + HANG_H + 2;
+    const topExt = Math.max(D + q.tuck, hang ? HANG_H : 0, q.dh);
+    const x0 = M + BLEED + 2, yT = M + 14 + BLEED + topExt + 2;
     const sl = sleeveOpen(q, x0, yT, hang);
     const row2 = yT + H + BLEED + 30;
     const yL = row2 + 14 + BLEED + (2 * TD - 1), xl = x0 + TD;
@@ -867,13 +880,13 @@
     const bottom = Math.max(yL + TL + TD + (TD - 1), yL + HANG_H + GZ) + BLEED;
     const TW = Math.max(x0 + 2 * W + 2 * D + GLUE + BLEED + M, xt + q.tw + BLEED + M, 280), TH = bottom + 50.5;
     const heads = [
-      [x0, M + 4, '1. ФУТЛЯР — открыт сверху и снизу' + (hang ? ', задняя стенка с клапаном-европодвесом' : ''), 5, true],
-      [x0, M + 10, `Панели ${f1(W)} × ${f1(D)} × ${f1(H)} мм` + (hang ? ` · клапан ${f1(q.hw)} × ${HANG_H} мм` : ''), 3.3],
+      [x0, M + 4, '1. ФУТЛЯР — верх закрывает крышка с язычком, низ открыт' + (hang ? ', задняя стенка с клапаном-европодвесом' : ''), 5, true],
+      [x0, M + 10, `Панели ${f1(W)} × ${f1(D)} × ${f1(H)} мм · язычок ${f1(q.tuck)} мм · бок. клапаны ${f1(q.dh)} мм` + (hang ? ` · клапан ${f1(q.hw)} × ${HANG_H} мм` : ''), 3.3],
       [x0, row2 + 4, '2. ЛОТОК (без крышки и ложемента)' + (hang ? ' + 3. ПОДВЕС-ВКЛЕЙКА' : ''), 5, true],
       [x0, row2 + 10, `Лоток ${f1(TW0)} × ${f1(TL)} × ${f1(TD)} мм` + (hang ? ` · подвес ${f1(q.tw)} × ${HANG_H} мм + ${GZ} мм под клей` : ''), 3.3],
     ];
     const notes = [
-      'Сборка: лоток вдвигается в футляр сверху. Футляр открыт с обоих торцов, лоток держится трением.',
+      'Сборка: лоток вдвигается в футляр сверху; затем верх закрывается: боковые клапаны внутрь, крышка сверху, язычок крышки — за заднюю стенку. Низ футляра открыт, лоток держится трением.',
       hang ? 'Подвес-вклейка приклеивается к задней стенке лотка снаружи; его отверстие совпадает с отверстием клапана футляра.' : 'Вариант без подвеса.',
       'Картон 0,4 мм; перед печатью сверить со штампом типографии.',
     ];
@@ -1027,7 +1040,7 @@
     mesh.position.set(...pos); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh;
   }
   const F = o => { const a = []; for (const k in o) a[k] = o[k]; return a; };
-  let hangerMesh = null, innerG, lidG, sleeveG;
+  let hangerMesh = null, innerG, lidG, sleeveG, hangTop = null;
 
   function disposeTree(obj) {
     obj.traverse(n => {
@@ -1065,6 +1078,17 @@
     slab(W, H, T, F({ 5: faceMat('hsleeve', 'back'), 4: innerM }), [0, H / 2, -D / 2 + T / 2], sleeveG);
     slab(T, H, D - 2 * T, F({ 1: faceMat('hsleeve', 's1'), 0: innerM }), [-W / 2 + T / 2, H / 2, 0], sleeveG);
     slab(T, H, D - 2 * T, F({ 0: faceMat('hsleeve', 's2'), 1: innerM }), [W / 2 - T / 2, H / 2, 0], sleeveG);
+    // верхняя крышка на лицевой стенке: язычок в своей группе (сначала складывается — иначе проходит сквозь стенку), боковые клапаны
+    const topG = new THREE.Group(); topG.position.set(0, H, D / 2); sleeveG.add(topG);
+    slab(W, T, D, F({ 2: faceMat('hsleeve', 'lidTop', 'v'), 3: innerM }), [0, T / 2, -D / 2], topG);
+    const tonT = new THREE.Group(); tonT.position.set(0, 0, -D); topG.add(tonT);
+    slab(W - 2, q.tuck, T, F({ 5: faceMat('hsleeve', 'tuckTop', 'hv'), 4: innerM }), [0, -q.tuck / 2, T * 1.5], tonT);
+    const flapsT = [[-1, 'dust1T'], [1, 'dust2T']].map(([sx, rt]) => {
+      const ft = new THREE.Group(); ft.position.set(sx * (W / 2 - T), H - T, 0); sleeveG.add(ft);
+      slab(q.dh, T, D - 4, F({ 2: faceMat('hsleeve', rt, '', true), 3: innerM }), [-sx * q.dh / 2, T / 2, 0], ft);
+      return { sx, ft };
+    });
+    hangTop = { topG, tonT, flapsT };
     if (hang) tabMesh(q.hw, faceMat('hsleeve', 'flap'), false, [0, H + HANG_H / 2, -D / 2 + T / 2], sleeveG);
     innerG = new THREE.Group(); root.add(innerG);
     const wd = DZ - T, bz = -DZ / 2 + T / 2, bc = T / 2;
@@ -1407,11 +1431,15 @@
     if (dims.type === 'hang') {
       const { W, H, BH, DZ } = dims;
       // лоток сначала полностью выходит вверх, затем уходит вбок над футляром и только потом опускается — без пересечений
-      const up = seg(t, 0.05, 0.36), side = seg(t, 0.37, 0.56), down = seg(t, 0.57, 0.74), tilt = seg(t, 0.78, 1);
+      const { topG, tonT, flapsT } = hangTop;
+      tonT.rotation.x = -seg(t, 0.02, 0.06) * R(90);                         // язычок крышки сначала отгибается от стенки
+      topG.rotation.x = seg(t, 0.05, 0.2) * R(125);                          // крышка откидывается назад
+      flapsT.forEach(({ sx, ft }) => { ft.rotation.z = sx * -seg(t, 0.14, 0.26) * R(100); });   // боковые клапаны внутрь
+      const up = seg(t, 0.28, 0.46), side = seg(t, 0.47, 0.62), down = seg(t, 0.63, 0.78), tilt = seg(t, 0.82, 1);
       const lift = H + HANG_H + 14;
       innerG.position.set(side * (W + 50), BH / 2 + (up - down) * lift + tilt * DZ * 0.4, 0.3 + side * 25 + tilt * 20);
       innerG.rotation.set(-tilt * R(58), -side * 0.3, 0);
-      setStep(t <= 0.02 ? 0 : t < 0.37 ? 1 : t < 0.76 ? 2 : 3);
+      setStep(t <= 0.02 ? 0 : t < 0.47 ? 1 : t < 0.8 ? 2 : 3);
       return;
     }
     const { W, H, LW, LH, DZ } = dims;
@@ -1438,7 +1466,7 @@
   // ================= parameters UI =================
   const allIds = ['W', 'L', 'D', 'nw', 'nh', 'dh', 'th', 'to', 'tp', 'hw'];
   const inp = Object.fromEntries(allIds.map(k => [k, document.getElementById('p-' + k)]));
-  const idsFor = ty => ty === 'sleeve' ? ['W', 'L', 'D', 'nw', 'nh', 'th', 'to'] : ty === 'tuck' ? ['W', 'L', 'D', 'dh'] : ty === 'tele' ? ['W', 'L', 'D', 'th'] : ty === 'wedge' ? ['W', 'L', 'D', 'tp'] : ty === 'hang' ? ['W', 'L', 'D', 'hw'] : ['W', 'L', 'D'];
+  const idsFor = ty => ty === 'sleeve' ? ['W', 'L', 'D', 'nw', 'nh', 'th', 'to'] : ty === 'tuck' ? ['W', 'L', 'D', 'dh'] : ty === 'tele' ? ['W', 'L', 'D', 'th'] : ty === 'wedge' ? ['W', 'L', 'D', 'tp'] : ty === 'hang' ? ['W', 'L', 'D', 'hw', 'dh'] : ['W', 'L', 'D'];
   // Пустое поле «Бок. клапаны» = полные клапаны (0 в поле не показываем).
   const optional = k => k === 'dh';
   const shown = (k, v) => optional(k) && !(v > 0) ? '' : v;
@@ -1477,12 +1505,15 @@
   const sheetWarn = sh => (Math.max(sh.TW, sh.TH) > 1000 || Math.min(sh.TW, sh.TH) > 700) ? ' · лист больше B1 (700 × 1000 мм) — уточните формат у типографии' : '';
   function updateTexts(q) {
     if (boxType === 'hang') {
+      const full = String(Math.round(q.dhFull * 10) / 10);
+      inp.dh.max = full;
+      if (q.dhFullUsed) { inp.dh.value = full; inp.dh.dataset.auto = full; } else { delete inp.dh.dataset.auto; }
       document.getElementById('h-size').textContent = `${fmt(q.TRAY[0])} × ${fmt(q.TRAY[1])} × ${fmt(q.TRAY[2])}`;
       document.getElementById('h-info').textContent = `Футляр ${fmt(q.OUT[0])} × ${fmt(q.OUT[1])} × ${fmt(q.OUT[2])} мм · лоток ${fmt(q.TRAY[0])} × ${fmt(q.TRAY[1])} × ${fmt(q.TRAY[2])} мм` + (hangerOn() && q.hangOK ? ` · европодвес ${fmt(q.hw)} мм` : '');
       const sh = sheetHang(params), notes = [];
       if (q.hw !== params.hw) notes.push(`ширина подвеса ограничена ${fmt(q.hw)} мм (40 … ширина футляра)`);
       if (!q.hangOK) notes.push('подвес не помещается при такой ширине');
-      document.getElementById('derived').textContent = `Лоток (внутр. размер под товар ≈ ${fmt(q.TRAY[0] - 0.8)} × ${fmt(q.TRAY[1] - 0.8)} × ${fmt(q.TRAY[2] - 0.4)}) · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (notes.length ? ' · ' + notes.join(' · ') : '');
+      document.getElementById('derived').textContent = `Язычок ${fmt(q.tuck)} мм · боковые клапаны ${fmt(q.dh)} мм${q.dhFullUsed ? ' (полные, почти встык)' : ''}${q.dhCut ? ' (ограничены — не длиннее полных)' : ''} · Лоток (внутр. размер под товар ≈ ${fmt(q.TRAY[0] - 0.8)} × ${fmt(q.TRAY[1] - 0.8)} × ${fmt(q.TRAY[2] - 0.4)}) · лист развёртки ${fmt(sh.TW)} × ${fmt(sh.TH)} мм` + (notes.length ? ' · ' + notes.join(' · ') : '');
       return;
     }
     if (boxType === 'wedge') {
@@ -1536,7 +1567,7 @@
     ['nw', 'nh'].forEach(k => { document.getElementById('f-' + k).hidden = boxType !== 'sleeve'; });
     document.getElementById('f-zones').hidden = boxType !== 'sleeve';
     document.getElementById('f-closedbot').hidden = boxType !== 'tuck';
-    document.getElementById('f-dh').hidden = boxType !== 'tuck';
+    document.getElementById('f-dh').hidden = boxType !== 'tuck' && boxType !== 'hang';
     document.getElementById('f-th').hidden = boxType !== 'tele' && boxType !== 'sleeve';
     document.getElementById('f-to').hidden = boxType !== 'sleeve';
     document.querySelector('#f-th span').textContent = boxType === 'sleeve' ? 'Картон внутр., мм' : 'Картон, мм';
