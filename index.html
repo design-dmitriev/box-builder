@@ -816,7 +816,7 @@
     const dhFullUsed = !(isFinite(p.dh) && p.dh > 0);
     const dh = dhFullUsed ? dhFull : Math.min(Math.max(p.dh, 3), dhFull);
     const dhCut = !dhFullUsed && p.dh > dhFull + 0.01;
-    return { ...p, TRAY, OUT, hw, tw: Math.min(hw, p.W - 2), hangOK: OUT[0] >= 40, nw: 0, nh: 0, zh: 0, tuck, dh, dhFull, dhFullUsed, dhCut, top: hangTopOn(), bot: hangBotOn() };
+    return { ...p, TRAY, OUT, hw, tw: hw, gw: Math.min(hw, p.W - 2), hangOK: OUT[0] >= 40, nw: 0, nh: 0, zh: 0, tuck, dh, dhFull, dhFullUsed, dhCut, top: hangTopOn(), bot: hangBotOn() };
   }
   const tabPoly = (x, yTop, w, yBase) => { const r = Math.min(6, w / 4); return P([[x, yBase], ...arc(x + r, yTop + r, r, 180, 270), ...arc(x + w - r, yTop + r, r, 270, 360), [x + w, yBase]]); };
   function sleeveOpen(q, x0, yT, hanger) {
@@ -858,8 +858,9 @@
     return { outline, bleed, printFill, holes, creases, options, panels, labels, rects, zones: [] };
   }
   function hangTab(q, x, yTop) {
-    const w = q.tw, y0 = yTop + HANG_H, yE = y0 + GZ;
-    const outline = union([tabPoly(x, yTop, w, yE)]), bleed = offset(outline, BLEED);
+    // видимая часть — той же ширины, что клапан футляра (края совпадают); клеевая часть уже — входит в футляр по лотку
+    const w = q.tw, gw = q.gw, y0 = yTop + HANG_H, yE = y0 + GZ, gx = x + (w - gw) / 2;
+    const outline = union([tabPoly(x, yTop, w, y0 + 0.01), rect(gx, y0, gx + gw, yE)]), bleed = offset(outline, BLEED);
     const labels = [], L = (xx, y, s, size, rot, fill) => labels.push({ x: xx, y, s, size, rot: rot || 0, fill: fill || COL.label });
     L(x + w / 2, y0 - 3.5, 'европодвес', 2.8); L(x + w / 2, y0 + GZ / 2 + 1, 'клей — к задней стенке лотка', 2.5);
     return { outline, bleed, printFill: bleed, holes: [...euro(x + w / 2, y0 - 14, false)], creases: [], options: [],
