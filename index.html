@@ -175,6 +175,10 @@
     border: 1px solid transparent; background: var(--field); color: var(--ink);
     font: inherit; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
   }
+  .presets { display: flex; gap: 8px; margin: 0 0 12px; }
+  .presets[hidden] { display: none; }
+  .presets button { flex: 1; font: inherit; font-size: 14px; font-weight: 600; padding: 10px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  .presets button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .num.wide { grid-column: 1 / -1; }
   .num select { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
   .num input[readonly] { color: var(--muted); background: transparent; border-style: dashed; }
@@ -272,6 +276,11 @@
     <div class="sec-top">
       <h2 class="sec-h">Размер</h2>
       <button class="link" id="p-reset" type="button" title="Вернуть размеры по умолчанию">85 × 150 × 20</button>
+    </div>
+    <div class="presets" id="presets" hidden>
+      <button type="button" data-lw="55" data-lh="100" data-lt="15">0,5 м</button>
+      <button type="button" data-lw="60" data-lh="120" data-lt="18">1 м</button>
+      <button type="button" data-lw="80" data-lh="125" data-lt="22">2 м</button>
     </div>
     <div class="fields">
       <label class="num" id="f-W"><span>Ширина, мм</span><input id="p-W" type="number" step="0.5" min="6" max="2000" inputmode="decimal"></label>
@@ -1643,6 +1652,7 @@
     }
     document.getElementById('h-size').textContent = `${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} × ${fmt(q.BASE[2])}`;
     document.getElementById('h-info').textContent = `Футляр ${fmt(q.OUT[0])} × ${fmt(q.OUT[1])} × ${fmt(q.OUT[2])} мм · крышка ${fmt(q.LID[0])} × ${fmt(q.LID[1])} · дно ${fmt(q.BASE[0])} × ${fmt(q.BASE[1])} мм`;
+    markPresets();
     if (leadSel.value !== 'outer') { inp.oW.value = r1(q.OUT[0]); inp.oD.value = r1(q.OUT[1]); inp.oH.value = r1(q.OUT[2]); }
     if (leadSel.value !== 'lodge') { const lg = Math.max(0, num('lg')) || 0; inp.lW.value = r1(q.BASE[0] - 2 * q.tI - 2 * lg); inp.lH.value = r1(q.BASE[1] - 2 * q.tI - 2 * lg); inp.lT.value = r1(q.BASE[2] - q.tI); }
     const ag = autoGaps(q.tI, q.tO); inp.gL.placeholder = r1(ag.gL) + ' авто'; ['gW', 'gD', 'gH'].forEach(k => { inp[k].placeholder = r1(ag.gS) + ' авто'; });
@@ -1658,6 +1668,12 @@
   allIds.forEach(k => inp[k].addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(() => { const p = readParams(); if (!p) return say('Проверьте размеры: поле подсвечено красным.', true); params = p; store(p); build(p, true); say(''); }, 350);
+  }));
+  const presetBtns = [...document.querySelectorAll('#presets button')];
+  const markPresets = () => presetBtns.forEach(b => b.setAttribute('aria-pressed', String(leadSel.value === 'lodge' && num('lW') === +b.dataset.lw && num('lH') === +b.dataset.lh && num('lT') === +b.dataset.lt)));
+  presetBtns.forEach(b => b.addEventListener('click', () => {
+    leadSel.value = 'lodge'; inp.lW.value = b.dataset.lw; inp.lH.value = b.dataset.lh; inp.lT.value = b.dataset.lt; inp.to.value = 0.5;
+    inp.W.dispatchEvent(new Event('input'));
   }));
   leadSel.addEventListener('change', () => { syncSleeve(); inp.W.dispatchEvent(new Event('input')); });
   document.getElementById('p-reset').addEventListener('click', () => {
@@ -1677,6 +1693,7 @@
     document.getElementById('f-hbot').hidden = boxType !== 'hang';
     document.getElementById('f-th').hidden = boxType !== 'tele' && boxType !== 'sleeve';
     document.getElementById('f-to').hidden = boxType !== 'sleeve';
+    document.getElementById('presets').hidden = boxType !== 'sleeve';
     ['lead', ...SLV, ...SOV, 'gL', 'gW', 'gD', 'gH'].forEach(k => { document.getElementById('f-' + k).hidden = boxType !== 'sleeve'; });
     leadSel.value = params.lead || 'lodge';
     document.querySelector('#f-th span').textContent = boxType === 'sleeve' ? 'Картон внутр., мм' : 'Картон, мм';
