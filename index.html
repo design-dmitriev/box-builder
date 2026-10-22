@@ -945,6 +945,7 @@
     'TEXT_ON_BOX',         // надписи на панелях коробки
     'TEXT_SHEET_NOPRINT',  // заголовки листа и примечания
     'LEGEND_NOPRINT',      // линии легенды
+    'MASK',                // только «Для Figma»: залитые контуры для масок (контуры вырубки/вылетов без заливки маской не работают)
   ];
   function buildSVG(sh, opts) {
     const font = opts.font || 'Arial, Helvetica, sans-serif';
@@ -964,6 +965,7 @@
       if (pc.options.length) L.OPTION_CREASE.push(`<g id="${n}_OPTION_CREASE"><path d="${segs(pc.options)}" fill="none" stroke="${COL.opt}" stroke-width="0.35" stroke-dasharray="4,1,1,1"/></g>`);
       L.CUT.push(`<g id="${n}_CUT"><path d="${d(pc.outline)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>${pc.holes.length ? `<path d="${d(pc.holes)}" fill="none" stroke="${COL.cut}" stroke-width="0.35"/>` : ''}</g>`);
       if (pc.zones.length) L.ARROW_ZONES_NOPRINT.push(`<g id="${n}_ARROW_ZONES_NOPRINT">${pc.zones.map(([x, y, w, h]) => `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${w.toFixed(3)}" height="${h.toFixed(3)}" fill="${COL.zone}" fill-opacity="0.35" stroke="${COL.zone}" stroke-width="0.3" stroke-dasharray="1,0.6"/>`).join('')}</g>`);
+      if (opts.px) L.MASK.push(`<g id="${n}_MASK"><path id="${n}_MASK_BLEED" d="${d(pc.bleed)}${pc.holes.length ? ' ' + d(pc.holes) : ''}" fill="#000000" fill-rule="evenodd" stroke="none"/><path id="${n}_MASK_CUT" d="${d(pc.outline)}${pc.holes.length ? ' ' + d(pc.holes) : ''}" fill="#000000" fill-rule="evenodd" stroke="none"/></g>`);
       if (pc.labels.length) L.TEXT_ON_BOX.push(`<g id="${n}_TEXT">${pc.labels.map(l => text(l, font)).join('')}</g>`);
     }
     const sheetText = [];
@@ -975,7 +977,9 @@
     L.LEGEND_NOPRINT.push(leg.map(([c, da], i) => `<line x1="${M + i * 45}" y1="${yl}" x2="${M + i * 45 + 10}" y2="${yl}" stroke="${c}" stroke-width="0.6"${da ? ` stroke-dasharray="${da}"` : ''}/>`).join(''));
     leg.forEach(([, , s], i) => sheetText.push({ x: M + i * 45 + 12, y: yl + 1.2, s, size: 3.4, fill: COL.head, anchor: 'start' }));
     L.TEXT_SHEET_NOPRINT.push(sheetText.map(l => text(l, font)).join(''));
-    SVG_LAYERS.forEach(name => { if (L[name].length) o.push(`<g id="${name}">${L[name].join('')}</g>`); });
+    // «Для Figma»: служебные слои выключены (в Figma они остаются в списке слоёв, но не попадают в печать/экспорт)
+    const figHide = opts.px ? ['BLEED', 'SAFE', 'ARROW_ZONES_NOPRINT', 'TEXT_SHEET_NOPRINT', 'LEGEND_NOPRINT', 'MASK'] : [];
+    SVG_LAYERS.forEach(name => { if (L[name].length) o.push(`<g id="${name}"${figHide.includes(name) ? ' display="none"' : ''}>${L[name].join('')}</g>`); });
     o.push('</svg>');
     return o.join('\n');
   }
@@ -1843,12 +1847,14 @@
         g2.transform(SS.u[0] * sx / kx, SS.v[0] * sy / kx, SS.u[1] * sx / ky, SS.v[1] * sy / ky,
           -(SS.o[0] * SS.u[0] + SS.o[1] * SS.u[1]) * sx, -(SS.o[0] * SS.v[0] + SS.o[1] * SS.v[1]) * sy);
         g2.drawImage(c, 0, 0);
-        return `<image x="0" y="0" width="${RR.w.toFixed(3)}" height="${RR.h.toFixed(3)}" transform="matrix(${RR.u[0].toFixed(5)} ${RR.u[1].toFixed(5)} ${RR.v[0].toFixed(5)} ${RR.v[1].toFixed(5)} ${RR.o[0].toFixed(3)} ${RR.o[1].toFixed(3)})" preserveAspectRatio="none" href="${c2.toDataURL('image/jpeg', 0.9)}"/>`;
+        const u2 = c2.toDataURL('image/jpeg', 0.9);
+        return `<image x="0" y="0" width="${RR.w.toFixed(3)}" height="${RR.h.toFixed(3)}" transform="matrix(${RR.u[0].toFixed(5)} ${RR.u[1].toFixed(5)} ${RR.v[0].toFixed(5)} ${RR.v[1].toFixed(5)} ${RR.o[0].toFixed(3)} ${RR.o[1].toFixed(3)})" preserveAspectRatio="none" href="${u2}" xlink:href="${u2}"/>`;
       }
       const cc = document.createElement('canvas');
       cc.width = Math.max(1, Math.round(r[2] * 12)); cc.height = Math.max(1, Math.round(r[3] * 12));
       cc.getContext('2d').drawImage(c, s[0] * kx, s[1] * ky, s[2] * kx, s[3] * ky, 0, 0, cc.width, cc.height);
-      return `<image x="${r[0].toFixed(3)}" y="${r[1].toFixed(3)}" width="${r[2].toFixed(3)}" height="${r[3].toFixed(3)}" preserveAspectRatio="none" href="${cc.toDataURL('image/jpeg', 0.9)}"/>`;
+      const u = cc.toDataURL('image/jpeg', 0.9);
+      return `<image x="${r[0].toFixed(3)}" y="${r[1].toFixed(3)}" width="${r[2].toFixed(3)}" height="${r[3].toFixed(3)}" preserveAspectRatio="none" href="${u}" xlink:href="${u}"/>`;
     }).join('');
   }
   const baseName = () => `${({ tuck: closedBot() ? 'korobka-yazychok-dno-yazychok-zamok' : 'korobka-yazychki', tele: 'kryshka-dno', wedge: 'korobka-klin', sleeve: 'futlyar', hang: 'futlyar-lotok' })[boxType]}_${f1(params.W)}x${f1(params.L)}x${f1(params.D)}`.replace(/\./g, ',');
@@ -1859,7 +1865,7 @@
   document.getElementById('ex-fig').addEventListener('click', () => {
     const sh = sheetAny(params);
     saveFile(baseName() + '_figma.svg', buildSVG(sh, { design: designImages, px: true }));
-    say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma — слои сохранятся. Не забудьте: после работы с дизайном в Figma переведите макет в Illustrator в CMYK.`);
+    say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma — слои сохранятся. Служебные слои выключены (не попадут в печать). Маска: включите слой MASK, возьмите залитый контур (…_MASK_CUT по вырубке или …_MASK_BLEED с вылетами), поставьте его ПОД макет и нажмите «Использовать как маску»; контуры CUT/BLEED без заливки маской не работают. Не забудьте: после работы с дизайном в Figma переведите макет в Illustrator в CMYK.`);
   });
   let pdfLibs = null;
   const loadPdfLibs = () => pdfLibs || (pdfLibs = loadScript('vendor/jspdf.umd.min.js')
