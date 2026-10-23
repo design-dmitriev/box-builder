@@ -248,6 +248,7 @@
 <style id="welcome-css">
   .help-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 
+  .hbtns{display:flex;gap:8px;margin-left:auto;align-self:center;flex-wrap:wrap}
   .cl-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px;position:relative}
   .cl-btn:hover{border-color:var(--ink)}
   .cl-btn.new::after{content:"";position:absolute;top:8px;right:10px;width:8px;height:8px;border-radius:50%;background:#e5390f}
@@ -2095,7 +2096,8 @@
   var ts=0;wl.addEventListener('pointerdown',function(){wl.classList.add('paused');clearTimeout(timer)});
   wl.addEventListener('pointerup',function(){wl.classList.remove('paused');if(wl.classList.contains('on'))go(cur)});
   var hb=document.createElement('button');hb.type='button';hb.className='help-btn';hb.innerHTML='<i>?</i>Как это работает';hb.onclick=open;
-  document.querySelector('header').appendChild(hb);
+  var hbw=document.createElement('div');hbw.className='hbtns';hbw.appendChild(hb);
+  document.querySelector('header').appendChild(hbw);
 
   /* ---------- что нового ---------- */
   var LOG=[
@@ -2121,7 +2123,7 @@
   clbg.addEventListener('click',function(e){if(e.target===clbg)clClose()});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&clbg.classList.contains('on'))clClose()});
   if(!clSeen())clb.classList.add('new');
-  document.querySelector('header').appendChild(clb);
+  hbw.appendChild(clb);
   if(!seen())setTimeout(open,700);
 })();
 </script>
