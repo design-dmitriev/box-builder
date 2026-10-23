@@ -247,6 +247,21 @@
 
 <style id="welcome-css">
   .help-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+
+  .cl-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px;position:relative}
+  .cl-btn:hover{border-color:var(--ink)}
+  .cl-btn.new::after{content:"";position:absolute;top:8px;right:10px;width:8px;height:8px;border-radius:50%;background:#e5390f}
+  .cl-bg{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+  .cl-bg.on{opacity:1;visibility:visible}
+  .cl{background:var(--bg);color:var(--ink);border-radius:24px;width:min(34rem,100%);max-height:min(80vh,40rem);display:flex;flex-direction:column;transform:translateY(14px);transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+  .cl-bg.on .cl{transform:none}
+  .cl-top{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 8px}
+  .cl-top h2{margin:0;font-size:22px;font-weight:500;letter-spacing:-.02em}
+  .cl-x{border:0;background:var(--line);color:var(--ink);width:44px;height:44px;border-radius:50%;font-size:20px;cursor:pointer}
+  .cl-body{overflow-y:auto;padding:0 24px 24px}
+  .cl-body h3{margin:18px 0 6px;font-size:13px;font-weight:500;color:#6b6b6b}
+  .cl-body ul{list-style:none;margin:0;padding:0}
+  .cl-body li{padding:10px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.45}
   .help-btn:hover{border-color:var(--ink)}
   .help-btn i{font-style:normal;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:12px}
   .wl{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:opacity .35s,visibility .35s;padding:16px}
@@ -2081,6 +2096,32 @@
   wl.addEventListener('pointerup',function(){wl.classList.remove('paused');if(wl.classList.contains('on'))go(cur)});
   var hb=document.createElement('button');hb.type='button';hb.className='help-btn';hb.innerHTML='<i>?</i>Как это работает';hb.onclick=open;
   document.querySelector('header').appendChild(hb);
+
+  /* ---------- что нового ---------- */
+  var LOG=[
+    ['23 октября 2026',[
+      'Экспорт «Для Figma»: все слои включены и видны. Вылеты, безопасная зона, зоны под стрелки, биговка, вырубка и подписи приходят сразу, лишнее для печати вы убираете сами.',
+      'Слой MASK в Figma приходит с прозрачностью 0, чтобы не закрывать макет. Для маски поставьте ему 100%.',
+      'Приветственная анимация для первого визита и кнопка «Как это работает».',
+      'Кнопка «Что нового» со списком изменений.'
+    ]],
+    ['22 октября 2026',[
+      'Экспорт «Для Figma»: слой MASK с залитыми контурами вырубки и вылетов для масок.'
+    ]]
+  ];
+  var LOGV=LOG[0][0];
+  var clb=document.createElement('button');clb.type='button';clb.className='cl-btn';clb.textContent='Что нового';
+  var clbg=document.createElement('div');clbg.className='cl-bg';
+  clbg.innerHTML='<div class="cl" role="dialog" aria-modal="true" aria-label="Что нового"><div class="cl-top"><h2>Что нового</h2><button type="button" class="cl-x" aria-label="Закрыть">×</button></div><div class="cl-body">'+LOG.map(function(e){return '<h3>'+e[0]+'</h3><ul>'+e[1].map(function(t){return '<li>'+t+'</li>'}).join('')+'</ul>'}).join('')+'</div></div>';
+  document.body.appendChild(clbg);
+  function clSeen(){try{return localStorage.getItem('clSeen')===LOGV}catch(x){return false}}
+  function clOpen(){clbg.classList.add('on');clb.classList.remove('new');try{localStorage.setItem('clSeen',LOGV)}catch(x){}clbg.querySelector('.cl-x').focus()}
+  function clClose(){clbg.classList.remove('on');clb.focus()}
+  clb.onclick=clOpen;clbg.querySelector('.cl-x').onclick=clClose;
+  clbg.addEventListener('click',function(e){if(e.target===clbg)clClose()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&clbg.classList.contains('on'))clClose()});
+  if(!clSeen())clb.classList.add('new');
+  document.querySelector('header').appendChild(clb);
   if(!seen())setTimeout(open,700);
 })();
 </script>
