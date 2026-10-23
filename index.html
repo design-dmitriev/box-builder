@@ -386,7 +386,7 @@
     <div class="ex-btns">
       <button id="ex-pdf" type="button">Скачать PDF</button>
       <button class="ghost" id="ex-svg" type="button">SVG</button>
-      <button class="ghost" id="ex-fig" type="button" title="SVG в точном размере для Figma: 1 px = 1 pt, слои сохранены">Для Figma</button>
+      <button class="ghost" id="ex-fig" type="button" title="SVG в точном размере для Figma: 1 px = 1 pt, все слои включены (вылеты, зоны под стрелки, биговка), лишнее убираете сами">Для Figma</button>
     </div>
     <label class="chk"><input type="checkbox" id="ex-design"><span>С текущим дизайном</span></label>
     <p id="status" role="status"></p>
@@ -998,16 +998,16 @@
   const SVG_LAYERS = [
     'BACKGROUND',          // фон коробки: заливка области печати с вылетами
     'DESIGN_PREVIEW',      // загруженный макет (при экспорте «с текущим дизайном»)
+    'ARROW_ZONES_NOPRINT', // зоны под стрелки (полупрозрачная заливка, ниже линий, чтобы вырубка и биговка оставались сверху)
     'BLEED',               // вылеты 3 мм
     'SAFE',                // безопасная зона
     'CREASE',              // биговка
     'OPTION_CREASE',       // биговка-опция
     'CUT',                 // вырубка
-    'ARROW_ZONES_NOPRINT', // зоны под стрелки
     'TEXT_ON_BOX',         // надписи на панелях коробки
     'TEXT_SHEET_NOPRINT',  // заголовки листа и примечания
     'LEGEND_NOPRINT',      // линии легенды
-    'MASK',                // только «Для Figma»: залитые контуры для масок (контуры вырубки/вылетов без заливки маской не работают)
+    'MASK',                // только «Для Figma»: залитые контуры для масок (приходят с opacity 0, чтобы не закрывать макет)
   ];
   function buildSVG(sh, opts) {
     const font = opts.font || 'Arial, Helvetica, sans-serif';
@@ -1039,9 +1039,11 @@
     L.LEGEND_NOPRINT.push(leg.map(([c, da], i) => `<line x1="${M + i * 45}" y1="${yl}" x2="${M + i * 45 + 10}" y2="${yl}" stroke="${c}" stroke-width="0.6"${da ? ` stroke-dasharray="${da}"` : ''}/>`).join(''));
     leg.forEach(([, , s], i) => sheetText.push({ x: M + i * 45 + 12, y: yl + 1.2, s, size: 3.4, fill: COL.head, anchor: 'start' }));
     L.TEXT_SHEET_NOPRINT.push(sheetText.map(l => text(l, font)).join(''));
-    // «Для Figma»: служебные слои выключены (в Figma они остаются в списке слоёв, но не попадают в печать/экспорт)
-    const figHide = opts.px ? ['BLEED', 'SAFE', 'ARROW_ZONES_NOPRINT', 'TEXT_SHEET_NOPRINT', 'LEGEND_NOPRINT', 'MASK'] : [];
-    SVG_LAYERS.forEach(name => { if (L[name].length) o.push(`<g id="${name}"${figHide.includes(name) ? ' display="none"' : ''}>${L[name].join('')}</g>`); });
+    // «Для Figma»: все слои включены и видны (display="none" Figma при импорте отбрасывает, и вылеты с зонами под стрелки пропадали),
+    // убирает лишнее для печати сам дизайнер. Исключение — MASK: залитые чёрным контуры перекрыли бы макет, поэтому слой
+    // приходит с нулевой прозрачностью (в Figma он на месте, включается одним движком Opacity).
+    const figOff = opts.px ? ['MASK'] : [];
+    SVG_LAYERS.forEach(name => { if (L[name].length) o.push(`<g id="${name}"${figOff.includes(name) ? ' opacity="0"' : ''}>${L[name].join('')}</g>`); });
     o.push('</svg>');
     return o.join('\n');
   }
@@ -1927,7 +1929,7 @@
   document.getElementById('ex-fig').addEventListener('click', () => {
     const sh = sheetAny(params);
     saveFile(baseName() + '_figma.svg', buildSVG(sh, { design: designImages, px: true }));
-    say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma — слои сохранятся. Служебные слои выключены (не попадут в печать). Маска: включите слой MASK, возьмите залитый контур (…_MASK_CUT по вырубке или …_MASK_BLEED с вылетами), поставьте его ПОД макет и нажмите «Использовать как маску»; контуры CUT/BLEED без заливки маской не работают. Не забудьте: после работы с дизайном в Figma переведите макет в Illustrator в CMYK.`);
+    say(`Для Figma: рамка ${fmt(sh.TW * PX_PER_MM)} × ${fmt(sh.TH * PX_PER_MM)} px = ${fmt(sh.TW)} × ${fmt(sh.TH)} мм (1 px = 1 pt). Перетащите файл в Figma: все слои включены и подписаны (вылеты, безопасная зона, биговка, вырубка, зоны под стрелки, подписи). Лишнее для печати уберите сами. Слой MASK пришёл с прозрачностью 0: для маски поставьте ему 100% и возьмите залитый контур (…_MASK_CUT по вырубке или …_MASK_BLEED с вылетами).`);
   });
   let pdfLibs = null;
   const loadPdfLibs = () => pdfLibs || (pdfLibs = loadScript('vendor/jspdf.umd.min.js')
