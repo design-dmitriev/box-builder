@@ -260,6 +260,7 @@
   #demo-sheet.on .chips span{opacity:1;transform:none}
   #demo-sheet.on .chips span:nth-child(2){transition-delay:.25s}#demo-sheet.on .chips span:nth-child(3){transition-delay:.5s}
   .ring{outline:2px solid #e5390f;outline-offset:2px;border-radius:12px;transition:outline-color .4s}
+  #h-size.ring{border-radius:6px}
 </style>
 <style id="welcome-css">
   .help-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
@@ -2076,9 +2077,9 @@
     const ring = (el, on) => { if (el) el.classList.toggle('ring', on); };
     const setV = (id, v) => { const el = $d(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
     async function tween(id, from, to, ms) {
-      const lab = $d('f-' + id.slice(2)); ring(lab, true);
+      const lab = $d('f-' + id.slice(2)), hs = $d('h-size'); ring(lab, true); ring(hs, true);
       const n = 10; for (let i = 1; i <= n; i++) { setV(id, Math.round(from + (to - from) * i / n)); await sleep(ms / n); }
-      await sleep(250); ring(lab, false);
+      await sleep(250); ring(lab, false); ring(hs, false);
     }
     const pick = k => document.querySelector(`#types [data-type="${k}"]`).click();
     async function run() {
