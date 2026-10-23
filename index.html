@@ -6,6 +6,7 @@
 <title>Сборщик коробочек</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap">
+<script>if(/[?&]demo/.test(location.search)){try{Storage.prototype.setItem=function(){};Storage.prototype.removeItem=function(){};Storage.prototype.getItem=function(k){return k==='bbWelcomeSeen'?'1':null}}catch(e){}}</script>
 <style>
   /* Швейцарский минимализм в духе design-dmitriev.github.io: белый лист,
      чёрный шрифт Onest, волосяные линии, нумерованные разделы, одно
@@ -245,6 +246,21 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
+<style id="demo-css">
+  .demo,.demo *{pointer-events:none!important}
+  .demo{overflow:hidden}
+  .demo .hbtns,.demo .hint,.demo .fs-btn,.demo .wl{display:none!important}
+  #demo-cap{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);z-index:20;background:#0a0a0a;color:#fff;border-radius:999px;padding:10px 20px;font-size:15px;white-space:nowrap;transition:opacity .3s}
+  #demo-sheet{position:absolute;inset:0;z-index:10;background:#fff;display:grid;grid-template-rows:1fr auto;gap:14px;padding:22px 22px 70px;opacity:0;visibility:hidden;transition:opacity .45s,visibility .45s}
+  #demo-sheet.on{opacity:1;visibility:visible}
+  #demo-sheet .net{min-height:0;display:grid;place-items:center}
+  #demo-sheet svg{max-width:100%;max-height:100%;width:100%;height:100%}
+  #demo-sheet .chips{display:flex;gap:8px;justify-content:center}
+  #demo-sheet .chips span{border:1px solid var(--ink);border-radius:999px;padding:7px 16px;font-size:14px;opacity:0;transform:translateY(8px);transition:all .4s}
+  #demo-sheet.on .chips span{opacity:1;transform:none}
+  #demo-sheet.on .chips span:nth-child(2){transition-delay:.25s}#demo-sheet.on .chips span:nth-child(3){transition-delay:.5s}
+  .ring{outline:2px solid #e5390f;outline-offset:2px;border-radius:12px;transition:outline-color .4s}
+</style>
 <style id="welcome-css">
   .help-btn{font:inherit;font-size:13px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 
@@ -2048,6 +2064,41 @@
     controls.update();
     renderer.render(scene, camera);
   });
+
+  // ================= демонстрация (?demo=1): само показывает работу сервиса, без кликов пользователя =================
+  if (/[?&]demo/.test(location.search)) {
+    document.documentElement.classList.add('demo');
+    const $d = id => document.getElementById(id), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const stageEl = $d('stage');
+    const cap = document.createElement('div'); cap.id = 'demo-cap'; stageEl.appendChild(cap);
+    const sheetEl = document.createElement('div'); sheetEl.id = 'demo-sheet'; stageEl.appendChild(sheetEl);
+    const say2 = async s => { cap.style.opacity = 0; await sleep(250); cap.textContent = s; cap.style.opacity = 1; };
+    const ring = (el, on) => { if (el) el.classList.toggle('ring', on); };
+    const setV = (id, v) => { const el = $d(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    async function tween(id, from, to, ms) {
+      const lab = $d('f-' + id.slice(2)); ring(lab, true);
+      const n = 10; for (let i = 1; i <= n; i++) { setV(id, Math.round(from + (to - from) * i / n)); await sleep(ms / n); }
+      await sleep(250); ring(lab, false);
+    }
+    const pick = k => document.querySelector(`#types [data-type="${k}"]`).click();
+    async function run() {
+      for (;;) {
+        pick('sleeve'); slider.value = 0; slider.dispatchEvent(new Event('input')); sheetEl.classList.remove('on');
+        await say2('Задайте размер товара'); await sleep(900);
+        await tween('p-W', 85, 70, 900); await tween('p-L', 150, 120, 900); await tween('p-D', 20, 28, 900);
+        await sleep(600);
+        await say2('Выберите тип коробки');
+        for (const k of ['tuck', 'tele', 'wedge', 'hang', 'sleeve']) { pick(k); await sleep(1700); }
+        await say2('Смотрите в 3D: коробка вскрывается');
+        play.click(); await sleep(5200);
+        await say2('Развёртка для печати');
+        sheetEl.innerHTML = '<div class="net">' + buildSVG(sheetAny(params), {}) + '</div><div class="chips"><span>PDF</span><span>SVG</span><span>Для Figma</span></div>';
+        sheetEl.classList.add('on'); await sleep(4200);
+        sheetEl.classList.remove('on'); await sleep(600);
+      }
+    }
+    setTimeout(run, 600);
+  }
 })();
 </script>
 
