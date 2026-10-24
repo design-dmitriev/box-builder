@@ -2075,7 +2075,11 @@
   // ================= демонстрация (?demo=1): само показывает работу сервиса, без кликов пользователя =================
   if (/[?&]demo/.test(location.search)) {
     document.documentElement.classList.add('demo');
-    const $d = id => document.getElementById(id), sleep = ms => new Promise(r => setTimeout(r, ms));
+    let gen = 0, goTo = -1; const CANCEL = { cancel: true };
+    const $d = id => document.getElementById(id), sleep = ms => { const g0 = gen; return new Promise((res, rej) => setTimeout(() => (gen === g0 ? res() : rej(CANCEL)), ms)); };
+    const rep = (i, d) => { try { parent.postMessage({ fy: 'step', i, n: 5, d }, '*'); } catch (e) {} };
+    try { parent.postMessage({ fy: 'steps', n: 5 }, '*'); } catch (e) {}
+    addEventListener('message', e => { const m = e.data; if (m && m.fy === 'go' && m.i >= 0 && m.i < 5) { goTo = m.i; gen++; } });
     const stageEl = $d('stage');
     const cap = document.createElement('div'); cap.id = 'demo-cap'; stageEl.appendChild(cap);
     const sheetEl = document.createElement('div'); sheetEl.id = 'demo-sheet'; stageEl.appendChild(sheetEl);
@@ -2095,24 +2099,39 @@
       await sleep(250); ring(lab, false); ring(hs, false);
     }
     const pick = k => document.querySelector(`#types [data-type="${k}"]`).click();
-    async function run() {
-      for (;;) {
-        pick('sleeve'); slider.value = 0; slider.dispatchEvent(new Event('input')); sheetEl.classList.remove('on');
-        await scrollTo(0);
-        await say2('Задайте размер товара'); await sleep(700);
+    async function steps(from) {
+      document.querySelectorAll('.ring').forEach(el => el.classList.remove('ring')); fade.classList.remove('on'); sheetEl.classList.remove('on');
+      pick('sleeve'); slider.value = 0; slider.dispatchEvent(new Event('input'));
+      if (from === 0) await scrollTo(0); else se.scrollTo({ top: 0, behavior: 'auto' });
+      if (from <= 0) {
+        rep(0, 6200); await say2('Задайте размер товара'); await sleep(700);
         await scrollToEl(document.querySelector('.panel'), 60); await sleep(300);
         await tween('p-W', 85, 70, 900); await tween('p-L', 150, 120, 900); await tween('p-D', 20, 28, 900);
         await sleep(400); await scrollTo(0);
-        await say2('Выберите тип коробки');
+      }
+      if (from <= 1) {
+        rep(1, 8800); await say2('Выберите тип коробки');
         for (const k of ['tuck', 'tele', 'wedge', 'hang', 'sleeve']) { pick(k); await sleep(1700); }
-        await say2('Смотрите в 3D: коробка вскрывается');
+      }
+      if (from <= 2) {
+        rep(2, 6000); await say2('Смотрите в 3D: коробка вскрывается');
         await scrollTo(0); play.click(); await sleep(5200);
-        await say2('Развёртка для печати');
+      }
+      if (from <= 3) {
+        rep(3, 3900); await say2('Развёртка для печати');
         sheetEl.innerHTML = '<div class="net">' + buildSVG(sheetAny(params), {}) + '</div><div class="chips"><span>PDF</span><span>SVG</span><span>Для Figma</span></div>';
         sheetEl.classList.add('on'); await sleep(3600);
-        sheetEl.classList.remove('on'); await say2('Скачайте PDF, SVG или версию для Figma');
-        await scrollToEl(document.querySelector('.sec.export'), 120); ring(document.querySelector('.ex-btns'), true); await sleep(2400); ring(document.querySelector('.ex-btns'), false);
-        await scrollTo(0); await sleep(500);
+        sheetEl.classList.remove('on');
+      }
+      rep(4, 4000); await say2('Скачайте PDF, SVG или версию для Figma');
+      await scrollToEl(document.querySelector('.sec.export'), 120); ring(document.querySelector('.ex-btns'), true); await sleep(2400); ring(document.querySelector('.ex-btns'), false);
+      await scrollTo(0); await sleep(500);
+    }
+    async function run() {
+      let from = 0;
+      for (;;) {
+        try { await steps(from); from = 0; }
+        catch (e) { if (e !== CANCEL) throw e; from = Math.max(0, goTo); goTo = -1; }
       }
     }
     setTimeout(run, 600);
