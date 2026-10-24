@@ -250,7 +250,9 @@
   .demo,.demo *{pointer-events:none!important}
   html.demo{overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
   .demo ::-webkit-scrollbar,html.demo::-webkit-scrollbar{display:none}
-  #demo-sb{position:fixed;right:3px;top:6px;bottom:6px;width:4px;border-radius:4px;background:rgba(0,0,0,.1);z-index:60;opacity:0;transition:opacity .3s}
+  #demo-fade{position:fixed;inset:0;background:#fff;z-index:70;opacity:0;pointer-events:none;transition:opacity .22s}
+  #demo-fade.on{opacity:1}
+  #demo-sb{display:none!important;position:fixed;right:3px;top:6px;bottom:6px;width:4px;border-radius:4px;background:rgba(0,0,0,.1);z-index:60;opacity:0;transition:opacity .3s}
   #demo-sb.on{opacity:1}
   #demo-sb i{position:absolute;left:0;right:0;top:0;border-radius:4px;background:rgba(0,0,0,.55)}
   .demo .hbtns,.demo .hint,.demo .fs-btn,.demo .wl{display:none!important}
@@ -2081,7 +2083,8 @@
     const thumb = sb.firstChild, se = document.scrollingElement || document.documentElement;
     const upd = () => { const tr = sb.clientHeight, vh = innerHeight, sh = se.scrollHeight; const th = Math.max(28, tr * vh / sh); thumb.style.height = th + 'px'; thumb.style.transform = 'translateY(' + ((tr - th) * (se.scrollTop / Math.max(1, sh - vh))) + 'px)'; sb.classList.toggle('on', sh > vh + 4); };
     addEventListener('scroll', upd, { passive: true }); setInterval(upd, 250);
-    const scrollTo = async y => { se.scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); await sleep(900); };
+    const fade = document.createElement('div'); fade.id = 'demo-fade'; document.body.appendChild(fade);
+    const scrollTo = async y => { fade.classList.add('on'); await sleep(220); se.scrollTo({ top: Math.max(0, y), behavior: 'auto' }); await sleep(60); fade.classList.remove('on'); await sleep(260); };
     const scrollToEl = async (el, off = 70) => scrollTo(el.getBoundingClientRect().top + se.scrollTop - off);
     const say2 = async s => { cap.style.opacity = 0; await sleep(250); cap.textContent = s; cap.style.opacity = 1; };
     const ring = (el, on) => { if (el) el.classList.toggle('ring', on); };
